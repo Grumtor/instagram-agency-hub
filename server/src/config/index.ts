@@ -1,30 +1,46 @@
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import path from 'path';
 import { z } from 'zod';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
+// Auto-detect Railway: if RAILWAY_PUBLIC_DOMAIN or RAILWAY_ENVIRONMENT exists, we're on Railway
+const isRailway = !!(process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_PROJECT_ID);
+
+// Auto-generate deterministic secrets from DATABASE_URL (so they're stable across deploys)
+// In production you should set real secrets, but this ensures the app boots
+function deriveSecret(seed: string, label: string): string {
+  return crypto.createHash('sha256').update(`${seed}:${label}`).digest('hex');
+}
+
+const dbUrl = process.env.DATABASE_URL || '';
+const autoJwtAccess = deriveSecret(dbUrl, 'jwt-access-secret-instagram-agency-hub');
+const autoJwtRefresh = deriveSecret(dbUrl, 'jwt-refresh-secret-instagram-agency-hub');
+const autoEncryption = deriveSecret(dbUrl, 'encryption-key-instagram-agency-hub');
+const autoOauthState = deriveSecret(dbUrl, 'oauth-state-instagram-agency-hub');
+
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default(isRailway ? 'production' : 'development'),
   PORT: z.coerce.number().default(3001),
   CLIENT_URL: z.string().default('http://localhost:5173'),
   RAILWAY_PUBLIC_DOMAIN: z.string().optional(),
 
-  DATABASE_URL: z.string().default('postgresql://placeholder:placeholder@localhost:5432/placeholder'),
+  DATABASE_URL: z.string().min(1).default('postgresql://placeholder:placeholder@localhost:5432/placeholder'),
 
-  JWT_ACCESS_SECRET: z.string().min(32).default('CHANGE_ME_jwt_access_secret_placeholder_32c'),
-  JWT_REFRESH_SECRET: z.string().min(32).default('CHANGE_ME_jwt_refresh_secret_placeholder_32c'),
+  JWT_ACCESS_SECRET: z.string().min(32).default(autoJwtAccess),
+  JWT_REFRESH_SECRET: z.string().min(32).default(autoJwtRefresh),
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
 
-  ENCRYPTION_KEY: z.string().length(64).default('0000000000000000000000000000000000000000000000000000000000000000'),
+  ENCRYPTION_KEY: z.string().length(64).default(autoEncryption),
 
   META_APP_ID: z.string().default('not-set'),
   META_APP_SECRET: z.string().default('not-set'),
   META_REDIRECT_URI: z.string().default(''),
   META_WEBHOOK_VERIFY_TOKEN: z.string().default('not-set'),
 
-  OAUTH_STATE_SECRET: z.string().default('not-set-change-me'),
+  OAUTH_STATE_SECRET: z.string().default(autoOauthState),
 
   UPLOAD_DIR: z.string().default('./uploads'),
   MAX_FILE_SIZE_MB: z.coerce.number().default(100),
@@ -35,40 +51,26 @@ const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
   const issues = parsed.error.flatten().fieldErrors;
-  console.error('============================================');
-  console.error('[Config] MISSING ENVIRONMENT VARIABLES:');
-  Object.entries(issues).forEach(([key, messages]) => {
-    console.error(`  - ${key}: ${(messages as string[]).join(', ')}`);
-  });
-  console.error('============================================');
-  throw new Error('Invalid environment variables — see above');
+  console.error('[Config] Invalid env:', issues);
+  throw new Error('Invalid environment variables');
 }
 
 const data = parsed.data;
+
+// Force production on Railway regardless of NODE_ENV value
+const env = isRailway ? 'production' as const : data.NODE_ENV;
+
 const railwayDomain = data.RAILWAY_PUBLIC_DOMAIN;
 const publicBase = railwayDomain ? `https://${railwayDomain}` : `http://localhost:${data.PORT}`;
 
-// Warn about placeholder values
-const placeholders = [];
-if (data.DATABASE_URL.includes('placeholder')) placeholders.push('DATABASE_URL (attach Postgres in Railway!)');
-if (data.JWT_ACCESS_SECRET.includes('CHANGE_ME')) placeholders.push('JWT_ACCESS_SECRET');
-if (data.JWT_REFRESH_SECRET.includes('CHANGE_ME')) placeholders.push('JWT_REFRESH_SECRET');
-if (data.ENCRYPTION_KEY === '0000000000000000000000000000000000000000000000000000000000000000') placeholders.push('ENCRYPTION_KEY');
-if (data.META_APP_ID === 'not-set') placeholders.push('META_APP_ID');
-if (data.META_APP_SECRET === 'not-set') placeholders.push('META_APP_SECRET');
-if (data.OAUTH_STATE_SECRET === 'not-set-change-me') placeholders.push('OAUTH_STATE_SECRET');
-
-if (placeholders.length > 0) {
-  console.warn('============================================');
-  console.warn('[Config] WARNING: These variables use placeholder defaults:');
-  placeholders.forEach(k => console.warn(`  - ${k}`));
-  console.warn('The app will start but these features will NOT work correctly.');
-  console.warn('Set real values in Railway → Variables.');
-  console.warn('============================================');
+if (isRailway) {
+  console.log('[Config] Railway detected — production mode');
+  console.log(`[Config] Domain: ${railwayDomain || '(no public domain yet)'}`);
+  console.log(`[Config] Database: ${data.DATABASE_URL.includes('placeholder') ? 'NOT SET — attach Postgres plugin!' : 'connected'}`);
 }
 
 export const config = {
-  env: data.NODE_ENV,
+  env,
   port: data.PORT,
   clientUrl: railwayDomain ? publicBase : data.CLIENT_URL,
   publicBase,
@@ -92,6 +94,6 @@ export const config = {
     maxFileSizeMb: data.MAX_FILE_SIZE_MB,
     publicUrl: data.PUBLIC_UPLOAD_URL || `${publicBase}/uploads`,
   },
-  isDev: data.NODE_ENV === 'development',
-  isProd: data.NODE_ENV === 'production',
+  isDev: env === 'development',
+  isProd: env === 'production',
 } as const;
