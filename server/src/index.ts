@@ -23,7 +23,7 @@ const server = app.listen(port, host, () => {
       });
       logger.info('Prisma migrations applied');
     } catch (err) {
-      logger.error('Prisma migrate deploy failed:', err);
+      logger.error({ err }, 'Prisma migrate deploy failed');
       process.exit(1);
     }
   }
