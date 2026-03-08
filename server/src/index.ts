@@ -1,5 +1,6 @@
 import http from 'http';
 import path from 'path';
+import { exec } from 'child_process';
 
 const PORT = Number(process.env.PORT) || 3001;
 const HOST = '0.0.0.0';
@@ -16,84 +17,85 @@ const server = http.createServer((req, res) => {
     return;
   }
   res.writeHead(503, { 'Content-Type': 'text/plain' });
-  res.end('App is starting, please wait...');
+  res.end('App is starting...');
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`[boot] Server listening on http://${HOST}:${PORT}`);
+  console.log(`[boot] Listening on port ${PORT}`);
   bootstrap();
 });
 
-async function bootstrap() {
-  console.log('[boot] Step 1: Running migrations...');
-  try {
-    const { execSync } = require('child_process') as typeof import('child_process');
+async function runMigrations(): Promise<void> {
+  return new Promise((resolve) => {
     const schemaPath = path.resolve(__dirname, '../../prisma/schema.prisma');
-    console.log('[boot] Schema path:', schemaPath);
-    console.log('[boot] DATABASE_URL set:', !!process.env.DATABASE_URL);
-    execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
-      stdio: 'inherit',
-      cwd: path.resolve(__dirname, '../..'),
-      env: { ...process.env },
+    const cwd = path.resolve(__dirname, '../..');
+    console.log('[boot] Running prisma migrate deploy...');
+    const child = exec(`npx prisma migrate deploy --schema=${schemaPath}`, { cwd, env: { ...process.env } });
+    child.stdout?.on('data', (d) => process.stdout.write(d));
+    child.stderr?.on('data', (d) => process.stderr.write(d));
+    child.on('close', (code) => {
+      if (code === 0) {
+        console.log('[boot] Migrations OK');
+      } else {
+        console.warn(`[boot] Migrations exited with code ${code} (may be OK if tables exist)`);
+      }
+      resolve();
     });
-    console.log('[boot] Migrations OK');
-  } catch (e) {
-    console.warn('[boot] Migration warning (continuing):', String(e));
-  }
+    child.on('error', (err) => {
+      console.warn('[boot] Migration error:', err.message);
+      resolve();
+    });
+  });
+}
 
-  console.log('[boot] Step 2: Importing app...');
+async function bootstrap() {
+  // Step 1: Import the app (fast, no blocking)
   try {
-    const appModule = await import('./app');
-    console.log('[boot] app.ts loaded');
-    const app = appModule.default;
+    console.log('[boot] Loading Express app...');
+    const { default: app } = await import('./app');
+    console.log('[boot] Express loaded');
 
-    console.log('[boot] Step 3: Importing config...');
-    const { config } = await import('./config');
-    console.log('[boot] Config loaded, env:', config.env);
+    // Step 2: Swap handler IMMEDIATELY so the app is live
+    appHandler = app;
+    console.log('[boot] Handler swapped — app is now serving requests');
 
-    console.log('[boot] Step 4: Seeding admin...');
+    // Step 3: Run migrations in background (non-blocking)
+    await runMigrations();
+
+    // Step 4: Seed admin if DB is empty
     try {
       const { seedAdminIfEmpty } = await import('./services/auth.service');
       await seedAdminIfEmpty();
-      console.log('[boot] Seed done');
-    } catch (seedErr) {
-      console.warn('[boot] Seed warning:', String(seedErr));
+    } catch (e) {
+      console.warn('[boot] Seed skipped:', String(e));
     }
 
-    console.log('[boot] Step 5: Starting scheduler...');
+    // Step 5: Start scheduler
     try {
       const { startScheduler } = await import('./services/scheduler.service');
       startScheduler();
       console.log('[boot] Scheduler started');
-    } catch (schedErr) {
-      console.warn('[boot] Scheduler warning:', String(schedErr));
+    } catch (e) {
+      console.warn('[boot] Scheduler skipped:', String(e));
     }
 
-    console.log('[boot] Step 6: Swapping handler...');
-    appHandler = app;
-    console.log('[boot] ============================================');
-    console.log('[boot] APP IS READY');
-    console.log(`[boot] URL: http://${HOST}:${PORT}`);
-    console.log('[boot] ============================================');
+    const { config } = await import('./config');
+    console.log('============================================');
+    console.log(`[boot] APP READY — ${config.env} mode`);
+    console.log('============================================');
   } catch (err) {
-    console.error('[boot] ============================================');
-    console.error('[boot] FATAL: Failed to load app');
-    console.error('[boot] Error:', err);
-    console.error('[boot] ============================================');
-
-    // Serve an error page instead of "Starting..."
+    console.error('[boot] FATAL:', err);
     appHandler = (_req, res) => {
       res.writeHead(500, { 'Content-Type': 'text/html' });
-      res.end(`<h1>App failed to start</h1><pre>${String(err)}</pre><p>Check Railway deploy logs.</p>`);
+      res.end(`<h1>Startup failed</h1><pre>${String(err)}</pre>`);
     };
   }
 }
 
 const shutdown = (signal: string) => {
-  console.log(`${signal} received — shutting down`);
+  console.log(`${signal} — shutting down`);
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 10_000);
 };
-
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
