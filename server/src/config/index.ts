@@ -10,7 +10,7 @@ const envSchema = z.object({
   CLIENT_URL: z.string().default('http://localhost:5173'),
   RAILWAY_PUBLIC_DOMAIN: z.string().optional(),
 
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required — attach a Postgres plugin in Railway'),
+  DATABASE_URL: z.string().default('postgresql://placeholder:placeholder@localhost:5432/placeholder'),
 
   JWT_ACCESS_SECRET: z.string().min(32).default('CHANGE_ME_jwt_access_secret_placeholder_32c'),
   JWT_REFRESH_SECRET: z.string().min(32).default('CHANGE_ME_jwt_refresh_secret_placeholder_32c'),
@@ -41,10 +41,7 @@ if (!parsed.success) {
     console.error(`  - ${key}: ${(messages as string[]).join(', ')}`);
   });
   console.error('============================================');
-  console.error('Set these in Railway → your service → Variables tab.');
-  console.error('The app will NOT function correctly without them.');
-  console.error('============================================');
-  process.exit(1);
+  throw new Error('Invalid environment variables — see above');
 }
 
 const data = parsed.data;
@@ -53,6 +50,7 @@ const publicBase = railwayDomain ? `https://${railwayDomain}` : `http://localhos
 
 // Warn about placeholder values
 const placeholders = [];
+if (data.DATABASE_URL.includes('placeholder')) placeholders.push('DATABASE_URL (attach Postgres in Railway!)');
 if (data.JWT_ACCESS_SECRET.includes('CHANGE_ME')) placeholders.push('JWT_ACCESS_SECRET');
 if (data.JWT_REFRESH_SECRET.includes('CHANGE_ME')) placeholders.push('JWT_REFRESH_SECRET');
 if (data.ENCRYPTION_KEY === '0000000000000000000000000000000000000000000000000000000000000000') placeholders.push('ENCRYPTION_KEY');
