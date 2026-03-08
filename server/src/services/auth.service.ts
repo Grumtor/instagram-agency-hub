@@ -22,6 +22,43 @@ interface AuthResult {
   tokens: TokenPair;
 }
 
+export async function seedAdminIfEmpty(): Promise<void> {
+  const count = await prisma.user.count();
+  if (count > 0) {
+    console.log('[seed] Users already exist, skipping admin creation');
+    return;
+  }
+
+  const email = 'admin@agency.com';
+  const password = 'Admin123!';
+  const name = 'Admin';
+
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  const user = await prisma.user.create({
+    data: { email, passwordHash, name },
+  });
+
+  await prisma.workspace.create({
+    data: {
+      name: 'My Agency',
+      members: {
+        create: {
+          userId: user.id,
+          role: MemberRole.OWNER,
+        },
+      },
+    },
+  });
+
+  console.log('============================================');
+  console.log('[seed] Admin account created:');
+  console.log(`  Email:    ${email}`);
+  console.log(`  Password: ${password}`);
+  console.log('  >>> CHANGE THIS PASSWORD AFTER FIRST LOGIN <<<');
+  console.log('============================================');
+}
+
 export async function register(email: string, password: string, name: string): Promise<AuthResult> {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
