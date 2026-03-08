@@ -10,67 +10,90 @@ const envSchema = z.object({
   CLIENT_URL: z.string().default('http://localhost:5173'),
   RAILWAY_PUBLIC_DOMAIN: z.string().optional(),
 
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required — attach a Postgres plugin in Railway'),
 
-  JWT_ACCESS_SECRET: z.string().min(32),
-  JWT_REFRESH_SECRET: z.string().min(32),
+  JWT_ACCESS_SECRET: z.string().min(32).default('CHANGE_ME_jwt_access_secret_placeholder_32c'),
+  JWT_REFRESH_SECRET: z.string().min(32).default('CHANGE_ME_jwt_refresh_secret_placeholder_32c'),
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
 
-  ENCRYPTION_KEY: z.string().length(64),
+  ENCRYPTION_KEY: z.string().length(64).default('0000000000000000000000000000000000000000000000000000000000000000'),
 
-  META_APP_ID: z.string().min(1),
-  META_APP_SECRET: z.string().min(1),
-  META_REDIRECT_URI: z.string(),
-  META_WEBHOOK_VERIFY_TOKEN: z.string().min(1),
+  META_APP_ID: z.string().default('not-set'),
+  META_APP_SECRET: z.string().default('not-set'),
+  META_REDIRECT_URI: z.string().default(''),
+  META_WEBHOOK_VERIFY_TOKEN: z.string().default('not-set'),
 
-  OAUTH_STATE_SECRET: z.string().min(1),
+  OAUTH_STATE_SECRET: z.string().default('not-set-change-me'),
 
   UPLOAD_DIR: z.string().default('./uploads'),
   MAX_FILE_SIZE_MB: z.coerce.number().default(100),
-  PUBLIC_UPLOAD_URL: z.string().default('http://localhost:3001/uploads'),
+  PUBLIC_UPLOAD_URL: z.string().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
   const issues = parsed.error.flatten().fieldErrors;
-  console.error('[Config] Missing or invalid environment variables:');
+  console.error('============================================');
+  console.error('[Config] MISSING ENVIRONMENT VARIABLES:');
   Object.entries(issues).forEach(([key, messages]) => {
     console.error(`  - ${key}: ${(messages as string[]).join(', ')}`);
   });
-  console.error('Set these in Railway → your service → Variables.');
+  console.error('============================================');
+  console.error('Set these in Railway → your service → Variables tab.');
+  console.error('The app will NOT function correctly without them.');
+  console.error('============================================');
   process.exit(1);
 }
 
-const railwayDomain = parsed.data.RAILWAY_PUBLIC_DOMAIN;
-const publicBase = railwayDomain ? `https://${railwayDomain}` : `http://localhost:${parsed.data.PORT}`;
+const data = parsed.data;
+const railwayDomain = data.RAILWAY_PUBLIC_DOMAIN;
+const publicBase = railwayDomain ? `https://${railwayDomain}` : `http://localhost:${data.PORT}`;
+
+// Warn about placeholder values
+const placeholders = [];
+if (data.JWT_ACCESS_SECRET.includes('CHANGE_ME')) placeholders.push('JWT_ACCESS_SECRET');
+if (data.JWT_REFRESH_SECRET.includes('CHANGE_ME')) placeholders.push('JWT_REFRESH_SECRET');
+if (data.ENCRYPTION_KEY === '0000000000000000000000000000000000000000000000000000000000000000') placeholders.push('ENCRYPTION_KEY');
+if (data.META_APP_ID === 'not-set') placeholders.push('META_APP_ID');
+if (data.META_APP_SECRET === 'not-set') placeholders.push('META_APP_SECRET');
+if (data.OAUTH_STATE_SECRET === 'not-set-change-me') placeholders.push('OAUTH_STATE_SECRET');
+
+if (placeholders.length > 0) {
+  console.warn('============================================');
+  console.warn('[Config] WARNING: These variables use placeholder defaults:');
+  placeholders.forEach(k => console.warn(`  - ${k}`));
+  console.warn('The app will start but these features will NOT work correctly.');
+  console.warn('Set real values in Railway → Variables.');
+  console.warn('============================================');
+}
 
 export const config = {
-  env: parsed.data.NODE_ENV,
-  port: parsed.data.PORT,
-  clientUrl: railwayDomain ? publicBase : parsed.data.CLIENT_URL,
+  env: data.NODE_ENV,
+  port: data.PORT,
+  clientUrl: railwayDomain ? publicBase : data.CLIENT_URL,
   publicBase,
-  databaseUrl: parsed.data.DATABASE_URL,
+  databaseUrl: data.DATABASE_URL,
   jwt: {
-    accessSecret: parsed.data.JWT_ACCESS_SECRET,
-    refreshSecret: parsed.data.JWT_REFRESH_SECRET,
-    accessExpiry: parsed.data.JWT_ACCESS_EXPIRY,
-    refreshExpiry: parsed.data.JWT_REFRESH_EXPIRY,
+    accessSecret: data.JWT_ACCESS_SECRET,
+    refreshSecret: data.JWT_REFRESH_SECRET,
+    accessExpiry: data.JWT_ACCESS_EXPIRY,
+    refreshExpiry: data.JWT_REFRESH_EXPIRY,
   },
-  encryptionKey: parsed.data.ENCRYPTION_KEY,
+  encryptionKey: data.ENCRYPTION_KEY,
   meta: {
-    appId: parsed.data.META_APP_ID,
-    appSecret: parsed.data.META_APP_SECRET,
-    redirectUri: parsed.data.META_REDIRECT_URI || `${publicBase}/api/instagram/callback`,
-    webhookVerifyToken: parsed.data.META_WEBHOOK_VERIFY_TOKEN,
+    appId: data.META_APP_ID,
+    appSecret: data.META_APP_SECRET,
+    redirectUri: data.META_REDIRECT_URI || `${publicBase}/api/instagram/callback`,
+    webhookVerifyToken: data.META_WEBHOOK_VERIFY_TOKEN,
   },
-  oauthStateSecret: parsed.data.OAUTH_STATE_SECRET,
+  oauthStateSecret: data.OAUTH_STATE_SECRET,
   upload: {
-    dir: parsed.data.UPLOAD_DIR,
-    maxFileSizeMb: parsed.data.MAX_FILE_SIZE_MB,
-    publicUrl: parsed.data.PUBLIC_UPLOAD_URL || `${publicBase}/uploads`,
+    dir: data.UPLOAD_DIR,
+    maxFileSizeMb: data.MAX_FILE_SIZE_MB,
+    publicUrl: data.PUBLIC_UPLOAD_URL || `${publicBase}/uploads`,
   },
-  isDev: parsed.data.NODE_ENV === 'development',
-  isProd: parsed.data.NODE_ENV === 'production',
+  isDev: data.NODE_ENV === 'development',
+  isProd: data.NODE_ENV === 'production',
 } as const;

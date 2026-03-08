@@ -1,45 +1,70 @@
-import { execSync } from 'child_process';
-import path from 'path';
-import app from './app';
-import { config } from './config';
-import { logger } from './utils/logger';
-import { startScheduler } from './services/scheduler.service';
+import http from 'http';
 
-// Railway: use PORT from env (injected at runtime); listen immediately so healthcheck passes
-const port = Number(process.env.PORT) || config.port;
-const host = config.isProd ? '0.0.0.0' : 'localhost';
+const PORT = Number(process.env.PORT) || 3001;
+const HOST = '0.0.0.0';
 
-const server = app.listen(port, host, () => {
-  logger.info(`Server running on http://${host}:${port} [${config.env}]`);
-  startScheduler();
-
-  // Run migrations after listen so /health succeeds first (avoids healthcheck timeout)
-  if (config.isProd) {
-    const schemaPath = path.resolve(__dirname, '../../prisma/schema.prisma');
-    try {
-      execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
-        stdio: 'inherit',
-        cwd: path.resolve(__dirname, '../..'),
-      });
-      logger.info('Prisma migrations applied');
-    } catch (err) {
-      logger.error({ err }, 'Prisma migrate deploy failed');
-      process.exit(1);
-    }
+// Phase 1: Open a bare HTTP server immediately so Railway healthcheck passes
+const earlyServer = http.createServer((_req, res) => {
+  if (_req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('ok');
+    return;
   }
+  res.writeHead(503);
+  res.end('Starting...');
 });
 
-const shutdown = (signal: string) => {
-  logger.info(`${signal} received — shutting down gracefully`);
-  server.close(() => {
-    logger.info('Server closed');
-    process.exit(0);
-  });
-  setTimeout(() => {
-    logger.error('Forced shutdown after timeout');
-    process.exit(1);
-  }, 10_000);
-};
+earlyServer.listen(PORT, HOST, () => {
+  console.log(`[boot] Healthcheck server on http://${HOST}:${PORT}/health`);
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+  // Phase 2: Load the full app (this triggers config validation, DB connection, etc.)
+  (async () => {
+    try {
+      const { default: app } = await import('./app');
+      const { config } = await import('./config');
+      const { logger } = await import('./utils/logger');
+      const { startScheduler } = await import('./services/scheduler.service');
+
+      // Phase 3: Replace the early server with the real Express app
+      earlyServer.close(() => {
+        const server = app.listen(PORT, HOST, () => {
+          logger.info(`Server running on http://${HOST}:${PORT} [${config.env}]`);
+
+          // Phase 4: Run migrations in production
+          if (config.isProd) {
+            try {
+              const pathMod = require('path') as typeof import('path');
+              const { execSync } = require('child_process') as typeof import('child_process');
+              const schemaPath = pathMod.resolve(__dirname, '../../prisma/schema.prisma');
+              execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
+                stdio: 'inherit',
+                cwd: pathMod.resolve(__dirname, '../..'),
+              });
+              logger.info('Prisma migrations applied');
+            } catch (err) {
+              logger.error({ err }, 'Prisma migrate deploy failed (non-fatal, tables may already exist)');
+            }
+          }
+
+          startScheduler();
+        });
+
+        const shutdown = (signal: string) => {
+          logger.info(`${signal} received — shutting down gracefully`);
+          server.close(() => {
+            logger.info('Server closed');
+            process.exit(0);
+          });
+          setTimeout(() => process.exit(1), 10_000);
+        };
+
+        process.on('SIGTERM', () => shutdown('SIGTERM'));
+        process.on('SIGINT', () => shutdown('SIGINT'));
+      });
+    } catch (err) {
+      console.error('[boot] Failed to load application:', err);
+      // Keep the early server running so healthcheck doesn't fail
+      // and Railway shows the error in logs instead of just "unhealthy"
+    }
+  })();
+});
