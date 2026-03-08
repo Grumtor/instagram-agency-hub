@@ -34,7 +34,12 @@ const envSchema = z.object({
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  console.error('Invalid environment variables:', parsed.error.flatten().fieldErrors);
+  const issues = parsed.error.flatten().fieldErrors;
+  console.error('[Config] Missing or invalid environment variables:');
+  Object.entries(issues).forEach(([key, messages]) => {
+    console.error(`  - ${key}: ${(messages as string[]).join(', ')}`);
+  });
+  console.error('Set these in Railway → your service → Variables.');
   process.exit(1);
 }
 
