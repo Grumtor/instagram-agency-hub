@@ -1,0 +1,142 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspaceMembers WorkspaceMember[]
+  posts            Post[]
+  auditLogs        AuditLog[]
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members           WorkspaceMember[]
+  instagramAccounts InstagramAccount[]
+  posts             Post[]
+  auditLogs         AuditLog[]
+  messages          Message[]
+}
+
+model WorkspaceMember {
+  id          String @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        String @default("MEMBER")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+}
+
+model InstagramAccount {
+  id                       String    @id @default(cuid())
+  workspaceId              String
+  igUserId                 String    @unique
+  igUsername               String
+  accessTokenEncrypted     String   @db.Text
+  accessTokenIV            String
+  accessTokenTag           String
+  tokenExpiresAt           DateTime?
+  permissions              String   @db.Text
+  accountType              String
+  profilePicUrl            String?
+  isActive                 Boolean   @default(true)
+  connectedAt              DateTime  @default(now())
+  lastTokenRefresh         DateTime?
+  pageId                   String?
+  pageAccessTokenEncrypted String?  @db.Text
+  pageAccessTokenIV        String?
+  pageAccessTokenTag       String?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  posts     Post[]
+  messages  Message[]
+
+  @@index([workspaceId])
+}
+
+model Post {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  igAccountId  String
+  type         String
+  caption      String?  @db.Text
+  mediaUrls    String   @db.Text
+  thumbnailUrl String?
+  scheduledAt  DateTime?
+  publishedAt  DateTime?
+  status       String    @default("DRAFT")
+  igPostId     String?
+  igPermalink  String?
+  errorMessage String?  @db.Text
+  retryCount   Int       @default(0)
+  maxRetries   Int       @default(3)
+  createdById  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  igAccount InstagramAccount @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
+  createdBy User             @relation(fields: [createdById], references: [id])
+
+  @@index([workspaceId])
+  @@index([status, scheduledAt])
+  @@index([igAccountId])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([workspaceId, createdAt])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  igAccountId    String
+  conversationId String
+  senderId       String
+  recipientId    String
+  content        String   @db.Text
+  direction      String
+  sentAt         DateTime
+  igMessageId    String?  @unique
+  createdAt      DateTime @default(now())
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  igAccount InstagramAccount @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, igAccountId, conversationId])
+  @@index([conversationId, sentAt])
+}

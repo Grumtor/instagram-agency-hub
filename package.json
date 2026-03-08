@@ -1,0 +1,30 @@
+{
+  "name": "instagram-agency-hub",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "build": "npx prisma generate --schema=prisma/schema.prisma && npm run build --workspace=client && npm run build --workspace=server",
+    "start": "node server/dist/index.js",
+    "db:migrate": "npx prisma migrate dev --schema=prisma/schema.prisma",
+    "db:migrate:deploy": "npx prisma migrate deploy --schema=prisma/schema.prisma",
+    "db:generate": "npx prisma generate --schema=prisma/schema.prisma",
+    "db:seed": "npx tsx prisma/seed.ts",
+    "postinstall": "npx prisma generate --schema=prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.2"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.2",
+    "tsx": "^4.21.0"
+  }
+}
