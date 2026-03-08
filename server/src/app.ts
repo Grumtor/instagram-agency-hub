@@ -10,6 +10,14 @@ import routes from './routes';
 
 const app = express();
 
+// Healthcheck first (no middleware) — for Railway / load balancers
+app.get('/health', (_req, res) => {
+  res.status(200).send('ok');
+});
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({
@@ -22,10 +30,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(globalLimiter);
 
 app.use('/uploads', express.static(path.resolve(config.upload.dir)));
-
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
 
 app.use('/api', routes);
 
