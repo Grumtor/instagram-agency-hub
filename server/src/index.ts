@@ -4,14 +4,12 @@ import path from 'path';
 const PORT = Number(process.env.PORT) || 3001;
 const HOST = '0.0.0.0';
 
-// Single HTTP server — starts with a minimal handler, then swaps to Express
 let appHandler: http.RequestListener | null = null;
 
 const server = http.createServer((req, res) => {
   if (appHandler) {
     return appHandler(req, res);
   }
-  // Before Express loads, only respond to healthcheck
   if (req.url === '/health' || req.url === '/api/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ok');
@@ -27,47 +25,67 @@ server.listen(PORT, HOST, () => {
 });
 
 async function bootstrap() {
+  console.log('[boot] Step 1: Running migrations...');
   try {
-    // Phase 1: Run migrations
-    console.log('[boot] Running database migrations...');
-    try {
-      const { execSync } = require('child_process') as typeof import('child_process');
-      const schemaPath = path.resolve(__dirname, '../../prisma/schema.prisma');
-      execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
-        stdio: 'inherit',
-        cwd: path.resolve(__dirname, '../..'),
-      });
-      console.log('[boot] Migrations applied successfully');
-    } catch {
-      console.warn('[boot] Migration failed (tables may already exist, continuing...)');
-    }
+    const { execSync } = require('child_process') as typeof import('child_process');
+    const schemaPath = path.resolve(__dirname, '../../prisma/schema.prisma');
+    console.log('[boot] Schema path:', schemaPath);
+    console.log('[boot] DATABASE_URL set:', !!process.env.DATABASE_URL);
+    execSync(`npx prisma migrate deploy --schema=${schemaPath}`, {
+      stdio: 'inherit',
+      cwd: path.resolve(__dirname, '../..'),
+      env: { ...process.env },
+    });
+    console.log('[boot] Migrations OK');
+  } catch (e) {
+    console.warn('[boot] Migration warning (continuing):', String(e));
+  }
 
-    // Phase 2: Load the full Express app
-    console.log('[boot] Loading application...');
-    const { default: app } = await import('./app');
+  console.log('[boot] Step 2: Importing app...');
+  try {
+    const appModule = await import('./app');
+    console.log('[boot] app.ts loaded');
+    const app = appModule.default;
+
+    console.log('[boot] Step 3: Importing config...');
     const { config } = await import('./config');
-    const { logger } = await import('./utils/logger');
-    const { startScheduler } = await import('./services/scheduler.service');
+    console.log('[boot] Config loaded, env:', config.env);
 
-    // Phase 3: Seed admin user if no users exist
+    console.log('[boot] Step 4: Seeding admin...');
     try {
       const { seedAdminIfEmpty } = await import('./services/auth.service');
       await seedAdminIfEmpty();
-    } catch (err) {
-      console.warn('[boot] Auto-seed skipped:', err);
+      console.log('[boot] Seed done');
+    } catch (seedErr) {
+      console.warn('[boot] Seed warning:', String(seedErr));
     }
 
-    // Phase 4: Swap handler — all requests now go through Express
-    appHandler = app;
-    logger.info(`App ready on http://${HOST}:${PORT} [${config.env}]`);
+    console.log('[boot] Step 5: Starting scheduler...');
+    try {
+      const { startScheduler } = await import('./services/scheduler.service');
+      startScheduler();
+      console.log('[boot] Scheduler started');
+    } catch (schedErr) {
+      console.warn('[boot] Scheduler warning:', String(schedErr));
+    }
 
-    startScheduler();
+    console.log('[boot] Step 6: Swapping handler...');
+    appHandler = app;
+    console.log('[boot] ============================================');
+    console.log('[boot] APP IS READY');
+    console.log(`[boot] URL: http://${HOST}:${PORT}`);
+    console.log('[boot] ============================================');
   } catch (err) {
-    console.error('[boot] ========================================');
-    console.error('[boot] FAILED TO START APPLICATION:');
-    console.error(err);
-    console.error('[boot] ========================================');
-    console.error('[boot] Healthcheck will keep running. Check the error above.');
+    console.error('[boot] ============================================');
+    console.error('[boot] FATAL: Failed to load app');
+    console.error('[boot] Error:', err);
+    console.error('[boot] ============================================');
+
+    // Serve an error page instead of "Starting..."
+    appHandler = (_req, res) => {
+      res.writeHead(500, { 'Content-Type': 'text/html' });
+      res.end(`<h1>App failed to start</h1><pre>${String(err)}</pre><p>Check Railway deploy logs.</p>`);
+    };
   }
 }
 
