@@ -36,8 +36,13 @@ app.use('/api', routes);
 if (config.isProd) {
   const clientDist = path.resolve(__dirname, '../../client/dist');
   app.use(express.static(clientDist));
-  app.get('*', (_req, res) => {
-    res.sendFile(path.join(clientDist, 'index.html'));
+  // Express 5 SPA fallback: serve index.html for any unmatched GET request
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+      res.sendFile(path.join(clientDist, 'index.html'));
+    } else {
+      next();
+    }
   });
 }
 
