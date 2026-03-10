@@ -63,9 +63,17 @@ const env = isRailway ? 'production' as const : data.NODE_ENV;
 const railwayDomain = data.RAILWAY_PUBLIC_DOMAIN;
 const publicBase = railwayDomain ? `https://${railwayDomain}` : `http://localhost:${data.PORT}`;
 
+// Always log key config for debugging
+console.log('[Config] ===== CONFIGURATION =====');
+console.log(`[Config] isRailway: ${isRailway}`);
+console.log(`[Config] NODE_ENV: ${env}`);
+console.log(`[Config] RAILWAY_PUBLIC_DOMAIN (raw env): "${process.env.RAILWAY_PUBLIC_DOMAIN || '(not set)'}"`);
+console.log(`[Config] railwayDomain (parsed): "${railwayDomain || '(empty)'}"`);
+console.log(`[Config] publicBase: "${publicBase}"`);
+console.log(`[Config] META_REDIRECT_URI (raw env): "${process.env.META_REDIRECT_URI || '(not set)'}"`);
+console.log(`[Config] META_REDIRECT_URI (parsed): "${data.META_REDIRECT_URI}"`);
 if (isRailway) {
   console.log('[Config] Railway detected — production mode');
-  console.log(`[Config] Domain: ${railwayDomain || '(no public domain yet)'}`);
   console.log(`[Config] Database: ${data.DATABASE_URL.includes('placeholder') ? 'NOT SET — attach Postgres plugin!' : 'connected'}`);
 }
 
@@ -97,3 +105,6 @@ export const config = {
   isDev: env === 'development',
   isProd: env === 'production',
 } as const;
+
+console.log(`[Config] FINAL meta.redirectUri: "${config.meta.redirectUri}"`);
+console.log('[Config] ===== END CONFIGURATION =====');

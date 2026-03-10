@@ -86,7 +86,8 @@ export function generateAuthUrl(workspaceId: string, userId: string): string {
   url.searchParams.set('state', state);
   url.searchParams.set('response_type', 'code');
 
-  logger.debug({ workspaceId }, 'Generated Instagram OAuth URL');
+  logger.info({ workspaceId, redirectUri: config.meta.redirectUri }, 'Generated Instagram OAuth URL');
+  console.log(`[OAuth] redirect_uri sent to Facebook: "${config.meta.redirectUri}"`);
   return url.toString();
 }
 
