@@ -14,9 +14,9 @@ export default function AccountsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Instagram Accounts</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Comptes Instagram</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Manage your connected Instagram accounts
+            Gérez vos comptes Instagram connectés. La connexion passe par Facebook (exigé par Instagram pour les comptes Pro).
           </p>
         </div>
         <ConnectAccountButton />

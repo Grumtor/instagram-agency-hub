@@ -63,6 +63,17 @@ const env = isRailway ? 'production' as const : data.NODE_ENV;
 const railwayDomain = data.RAILWAY_PUBLIC_DOMAIN;
 const publicBase = railwayDomain ? `https://${railwayDomain}` : `http://localhost:${data.PORT}`;
 
+// Facebook exige HTTPS en production : on force l'URI de redirection en https si on est sur Railway
+function ensureHttpsRedirectUri(uri: string, inProduction: boolean): string {
+  if (!inProduction) return uri;
+  if (uri.startsWith('http://')) {
+    const fixed = 'https://' + uri.slice(7);
+    console.warn(`[Config] META_REDIRECT_URI was HTTP; Facebook requires HTTPS. Using: "${fixed}"`);
+    return fixed;
+  }
+  return uri;
+}
+
 // Always log key config for debugging
 console.log('[Config] ===== CONFIGURATION =====');
 console.log(`[Config] isRailway: ${isRailway}`);
@@ -93,7 +104,10 @@ export const config = {
   meta: {
     appId: data.META_APP_ID,
     appSecret: data.META_APP_SECRET,
-    redirectUri: data.META_REDIRECT_URI || `${publicBase}/api/instagram/callback`,
+    redirectUri: ensureHttpsRedirectUri(
+      data.META_REDIRECT_URI || `${publicBase}/api/instagram/callback`,
+      env === 'production'
+    ),
     webhookVerifyToken: data.META_WEBHOOK_VERIFY_TOKEN,
   },
   oauthStateSecret: data.OAUTH_STATE_SECRET,

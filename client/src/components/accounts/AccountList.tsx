@@ -26,9 +26,9 @@ export function AccountList({
     return (
       <EmptyState
         icon={Users}
-        title="No accounts connected"
-        description="Connect your first Instagram account to start managing your content."
-        action={{ label: 'Connect Account', onClick: onConnect }}
+        title="Aucun compte Instagram connecté"
+        description="Connectez votre premier compte Instagram pour gérer vos publications. Vous serez redirigé vers Facebook pour autoriser l'accès (obligatoire pour les comptes Instagram professionnels)."
+        action={{ label: 'Connecter un compte Instagram', onClick: onConnect }}
       />
     );
   }

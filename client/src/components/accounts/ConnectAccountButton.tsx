@@ -22,12 +22,13 @@ export function ConnectAccountButton() {
 
   return (
     <button
+      data-connect-btn
       onClick={handleConnect}
       disabled={loading}
       className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
     >
       <Plus className="h-4 w-4" />
-      {loading ? 'Connecting...' : 'Connect Instagram Account'}
+      {loading ? 'Connexion...' : 'Connecter un compte Instagram'}
     </button>
   );
 }
