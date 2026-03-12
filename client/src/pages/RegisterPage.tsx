@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { Instagram, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { ROUTES } from '../lib/constants';
+import { extractErrorMessage } from '../lib/errorUtils';
 
 export default function RegisterPage() {
   const { user, register } = useAuth();
@@ -40,8 +41,8 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(name, email, password);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || err.response?.data?.message || 'Registration failed');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Registration failed'));
     } finally {
       setLoading(false);
     }

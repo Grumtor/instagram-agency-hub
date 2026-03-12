@@ -68,6 +68,7 @@ export async function getPosts(
       include: {
         igAccount: { select: { id: true, igUsername: true } },
         createdBy: { select: { id: true, email: true, name: true } },
+        insight: { select: { likeCount: true, commentCount: true, savedCount: true, engagementRate: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -94,6 +95,7 @@ export async function getPostById(postId: string, workspaceId: string) {
     include: {
       igAccount: { select: { id: true, igUsername: true } },
       createdBy: { select: { id: true, email: true, name: true } },
+      insight: { select: { likeCount: true, commentCount: true, savedCount: true, engagementRate: true } },
     },
   });
 

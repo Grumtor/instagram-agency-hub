@@ -1,15 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Save, UserPlus, Settings, Lock } from 'lucide-react';
+import { Save, UserPlus, Settings, Lock, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import { useWorkspace } from '../hooks/useWorkspace';
+import { useAuth } from '../hooks/useAuth';
 import { ROLE_LABELS } from '../lib/constants';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { ErrorAlert } from '../components/common/ErrorAlert';
 import { EmptyState } from '../components/common/EmptyState';
+import { extractErrorMessage } from '../lib/errorUtils';
 import type { WorkspaceMember } from '../types';
 import { cn } from '../lib/utils';
 
 type Tab = 'general' | 'members' | 'security';
+
+const TAB_PANEL_ID = (tab: Tab) => `tabpanel-${tab}`;
+const TAB_BUTTON_ID = (tab: Tab) => `tab-${tab}`;
 
 export default function SettingsPage() {
   const { currentWorkspace, refreshWorkspaces } = useWorkspace();
@@ -25,10 +31,14 @@ export default function SettingsPage() {
       </div>
 
       <div className="border-b border-gray-200">
-        <nav className="flex gap-6">
+        <nav className="flex gap-6" role="tablist" aria-label="Settings tabs">
           {(['general', 'members', 'security'] as Tab[]).map((tab) => (
             <button
               key={tab}
+              id={TAB_BUTTON_ID(tab)}
+              role="tab"
+              aria-selected={activeTab === tab}
+              aria-controls={TAB_PANEL_ID(tab)}
               onClick={() => setActiveTab(tab)}
               className={cn(
                 'pb-3 text-sm font-medium border-b-2 transition-colors capitalize',
@@ -43,16 +53,35 @@ export default function SettingsPage() {
         </nav>
       </div>
 
-      {activeTab === 'general' ? (
+      <div
+        id={TAB_PANEL_ID('general')}
+        role="tabpanel"
+        aria-labelledby={TAB_BUTTON_ID('general')}
+        hidden={activeTab !== 'general'}
+      >
         <GeneralTab
           workspace={currentWorkspace}
           onUpdated={refreshWorkspaces}
         />
-      ) : activeTab === 'members' ? (
+      </div>
+
+      <div
+        id={TAB_PANEL_ID('members')}
+        role="tabpanel"
+        aria-labelledby={TAB_BUTTON_ID('members')}
+        hidden={activeTab !== 'members'}
+      >
         <MembersTab workspaceId={currentWorkspace?.id} />
-      ) : (
+      </div>
+
+      <div
+        id={TAB_PANEL_ID('security')}
+        role="tabpanel"
+        aria-labelledby={TAB_BUTTON_ID('security')}
+        hidden={activeTab !== 'security'}
+      >
         <SecurityTab />
-      )}
+      </div>
     </div>
   );
 }
@@ -66,7 +95,6 @@ function GeneralTab({
 }) {
   const [name, setName] = useState(workspace?.name || '');
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -79,14 +107,14 @@ function GeneralTab({
 
     setSaving(true);
     setError('');
-    setSuccess(false);
     try {
       await api.patch(`/api/workspaces/${workspace.id}`, { name: name.trim() });
       await onUpdated();
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to update workspace');
+      toast.success('Workspace updated');
+    } catch (err) {
+      const message = extractErrorMessage(err, 'Failed to update workspace');
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -112,11 +140,6 @@ function GeneralTab({
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
-          </div>
-        )}
-        {success && (
-          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-            Workspace updated successfully
           </div>
         )}
 
@@ -147,6 +170,7 @@ function GeneralTab({
 }
 
 function MembersTab({ workspaceId }: { workspaceId?: string }) {
+  const { user: currentUser } = useAuth();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +178,10 @@ function MembersTab({ workspaceId }: { workspaceId?: string }) {
   const [inviteRole, setInviteRole] = useState('MEMBER');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
+  // Inline confirm state: stores the member.id pending confirmation, or null
+  const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | null>(null);
 
   const fetchMembers = useCallback(async () => {
     if (!workspaceId) return;
@@ -162,8 +190,8 @@ function MembersTab({ workspaceId }: { workspaceId?: string }) {
     try {
       const { data } = await api.get(`/api/workspaces/${workspaceId}/members`);
       setMembers(data.members ?? data);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to load members');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Failed to load members'));
     } finally {
       setLoading(false);
     }
@@ -186,10 +214,56 @@ function MembersTab({ workspaceId }: { workspaceId?: string }) {
       });
       setInviteEmail('');
       fetchMembers();
-    } catch (err: any) {
-      setInviteError(err.response?.data?.error?.message || 'Failed to invite member');
+      toast.success('Invitation sent');
+    } catch (err) {
+      const message = extractErrorMessage(err, 'Failed to invite member');
+      setInviteError(message);
+      toast.error(message);
     } finally {
       setInviting(false);
+    }
+  };
+
+  const handleRoleChange = async (member: WorkspaceMember, newRole: string) => {
+    if (!workspaceId || newRole === member.role) return;
+    setUpdatingRoleId(member.id);
+    try {
+      await api.patch(`/api/workspaces/${workspaceId}/members/${member.id}`, {
+        role: newRole,
+      });
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === member.id ? { ...m, role: newRole as WorkspaceMember['role'] } : m
+        )
+      );
+      toast.success('Role updated');
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Failed to update role'));
+    } finally {
+      setUpdatingRoleId(null);
+    }
+  };
+
+  const handleRemoveClick = (member: WorkspaceMember) => {
+    setConfirmingRemoveId(member.id);
+  };
+
+  const handleCancelRemove = () => {
+    setConfirmingRemoveId(null);
+  };
+
+  const handleConfirmRemove = async (member: WorkspaceMember) => {
+    if (!workspaceId) return;
+    setConfirmingRemoveId(null);
+    setRemovingId(member.id);
+    try {
+      await api.delete(`/api/workspaces/${workspaceId}/members/${member.id}`);
+      setMembers((prev) => prev.filter((m) => m.id !== member.id));
+      toast.success('Member removed');
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Failed to remove member'));
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -259,27 +333,82 @@ function MembersTab({ workspaceId }: { workspaceId?: string }) {
                 <th className="px-4 py-3 text-left font-medium text-gray-600">
                   Role
                 </th>
+                <th className="px-4 py-3 text-left font-medium text-gray-600">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {members.map((member) => (
-                <tr
-                  key={member.id}
-                  className="hover:bg-gray-50/50 transition-colors"
-                >
-                  <td className="px-4 py-3 text-gray-900">
-                    {member.user?.name || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {member.user?.email || '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
-                      {ROLE_LABELS[member.role] || member.role}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {members.map((member) => {
+                const isCurrentUser = currentUser?.id === member.userId;
+                const isOwner = member.role === 'OWNER';
+                const isConfirmingRemove = confirmingRemoveId === member.id;
+                return (
+                  <tr
+                    key={member.id}
+                    className="hover:bg-gray-50/50 transition-colors"
+                  >
+                    <td className="px-4 py-3 text-gray-900">
+                      {member.user?.name || '—'}
+                      {isCurrentUser && (
+                        <span className="ml-2 text-xs text-gray-400">(you)</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {member.user?.email || '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isOwner || isCurrentUser ? (
+                        <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
+                          {ROLE_LABELS[member.role] || member.role}
+                        </span>
+                      ) : (
+                        <select
+                          value={member.role}
+                          disabled={updatingRoleId === member.id}
+                          onChange={(e) => handleRoleChange(member, e.target.value)}
+                          className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                        >
+                          <option value="ADMIN">Admin</option>
+                          <option value="MEMBER">Member</option>
+                        </select>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {!isCurrentUser && !isOwner && (
+                        isConfirmingRemove ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-600">Remove member?</span>
+                            <button
+                              onClick={() => handleConfirmRemove(member)}
+                              disabled={removingId === member.id}
+                              className="inline-flex items-center rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={handleCancelRemove}
+                              className="inline-flex items-center rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleRemoveClick(member)}
+                            disabled={removingId === member.id}
+                            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-50 transition-colors"
+                            aria-label={`Remove ${member.user?.name || member.user?.email || 'member'}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {removingId === member.id ? 'Removing...' : 'Remove'}
+                          </button>
+                        )
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -319,8 +448,8 @@ function SecurityTab() {
       setNewPassword('');
       setConfirmPassword('');
       setTimeout(() => setSuccess(''), 5000);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to change password');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Failed to change password'));
     } finally {
       setSaving(false);
     }

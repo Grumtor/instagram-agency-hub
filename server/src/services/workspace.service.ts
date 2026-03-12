@@ -157,6 +157,44 @@ export async function addMember(workspaceId: string, email: string, role: string
   return member;
 }
 
+export async function updateMemberRole(workspaceId: string, memberId: string, role: string, updatedByUserId: string) {
+  const member = await prisma.workspaceMember.findUnique({
+    where: { id: memberId },
+    include: { user: { select: { id: true, email: true, name: true } } },
+  });
+
+  if (!member || member.workspaceId !== workspaceId) {
+    throw new NotFoundError('Workspace member');
+  }
+
+  if (member.role === MemberRole.OWNER) {
+    throw new ForbiddenError('Cannot change the role of the workspace owner');
+  }
+
+  if (role === MemberRole.OWNER) {
+    throw new ForbiddenError('Cannot assign OWNER role');
+  }
+
+  const updated = await prisma.workspaceMember.update({
+    where: { id: memberId },
+    data: { role },
+    include: {
+      user: { select: { id: true, email: true, name: true } },
+    },
+  });
+
+  await createAuditLog(
+    workspaceId,
+    updatedByUserId,
+    AuditAction.MEMBER_ROLE_CHANGED,
+    'WorkspaceMember',
+    memberId,
+    { email: member.user.email, oldRole: member.role, newRole: role },
+  );
+
+  return updated;
+}
+
 export async function removeMember(workspaceId: string, memberId: string, removedByUserId: string) {
   const member = await prisma.workspaceMember.findUnique({
     where: { id: memberId },

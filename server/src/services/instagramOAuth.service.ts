@@ -3,7 +3,7 @@ import { config } from '../config';
 import { prisma } from '../config/database';
 import { encrypt } from '../config/encryption';
 import { logger } from '../utils/logger';
-import { ValidationError } from '../utils/errors';
+import { ValidationError, ConflictError } from '../utils/errors';
 import { AuditAction } from '../types/enums';
 import { createAuditLog } from './auditLog.service';
 import * as metaApi from './metaApi.service';
@@ -13,6 +13,7 @@ const OAUTH_SCOPES = [
   'instagram_content_publish',
   'instagram_manage_comments',
   'instagram_manage_messages',
+  'instagram_manage_insights',
   'pages_show_list',
   'pages_read_engagement',
   'pages_manage_metadata',
@@ -147,6 +148,14 @@ export async function handleCallback(code: string, state: string): Promise<Conne
 
     const debugResult = await metaApi.debugToken(longLivedToken);
     const permissions = debugResult.data.scopes?.join(',') ?? '';
+
+    // Cross-workspace guard: reject if igUserId already belongs to a different workspace
+    const existingAccount = await prisma.instagramAccount.findUnique({
+      where: { igUserId: igBusinessAccount.id },
+    });
+    if (existingAccount && existingAccount.workspaceId !== workspaceId) {
+      throw new ConflictError('This Instagram account is already connected to another workspace');
+    }
 
     const account = await prisma.instagramAccount.upsert({
       where: { igUserId: igBusinessAccount.id },

@@ -6,6 +6,7 @@ import { useWorkspace } from '../hooks/useWorkspace';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { EmptyState } from '../components/common/EmptyState';
 import { ErrorAlert } from '../components/common/ErrorAlert';
+import { extractErrorMessage } from '../lib/errorUtils';
 import type { AuditLogEntry } from '../types';
 
 export default function AuditLogPage() {
@@ -28,8 +29,8 @@ export default function AuditLogPage() {
       );
       setEntries(data.logs ?? data.entries ?? data);
       setTotal(data.pagination?.total ?? data.total ?? (data.logs ?? data.entries ?? data).length);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to load audit logs');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Failed to load audit logs'));
     } finally {
       setLoading(false);
     }

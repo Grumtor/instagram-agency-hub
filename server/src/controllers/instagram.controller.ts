@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import * as instagramOAuthService from '../services/instagramOAuth.service';
 import { successResponse } from '../utils/apiResponse';
-import { UnauthorizedError, ValidationError, ForbiddenError } from '../utils/errors';
+import { UnauthorizedError, ValidationError, ForbiddenError, ConflictError } from '../utils/errors';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { prisma } from '../config/database';
@@ -56,6 +56,10 @@ export async function handleCallback(req: Request, res: Response, next: NextFunc
     }
   } catch (error) {
     logger.error({ error }, 'Instagram OAuth callback failed');
+    if (error instanceof ConflictError) {
+      res.redirect(`${config.clientUrl}/accounts?error=account_already_connected_to_another_workspace`);
+      return;
+    }
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.redirect(`${config.clientUrl}/accounts?error=${encodeURIComponent(message)}`);
   }

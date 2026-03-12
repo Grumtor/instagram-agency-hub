@@ -3,7 +3,7 @@ import { AuditAction } from '../types/enums';
 
 export async function createAuditLog(
   workspaceId: string,
-  userId: string,
+  userId: string | null,
   action: AuditAction,
   entityType: string,
   entityId?: string,
@@ -12,7 +12,7 @@ export async function createAuditLog(
   return prisma.auditLog.create({
     data: {
       workspaceId,
-      userId,
+      userId: userId ?? null,
       action,
       entityType,
       entityId: entityId ?? null,

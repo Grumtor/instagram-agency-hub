@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAccounts } from '../hooks/useAccounts';
+import { useCurrentMemberRole } from '../hooks/useCurrentMemberRole';
 import { AccountList } from '../components/accounts/AccountList';
 import { ConnectAccountButton } from '../components/accounts/ConnectAccountButton';
 
 export default function AccountsPage() {
-  const { accounts, loading, error, refetch } = useAccounts();
+  const { accounts, loading, error, refetch, disconnect, refreshToken } = useAccounts();
+  const { role } = useCurrentMemberRole();
   const [searchParams, setSearchParams] = useSearchParams();
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const canManage = role === 'OWNER' || role === 'ADMIN';
 
   useEffect(() => {
     const connected = searchParams.get('connected');
@@ -27,6 +31,10 @@ export default function AccountsPage() {
         setErrorMessage(
           'No Instagram Business account was found linked to your Facebook Pages. Please ensure your Instagram account is converted to a Business or Creator account and linked to a Facebook Page.'
         );
+      } else if (errorParam === 'account_already_connected_to_another_workspace') {
+        setErrorMessage(
+          'This Instagram account is already connected to another workspace.'
+        );
       } else {
         setErrorMessage(decodeURIComponent(errorParam));
       }
@@ -43,9 +51,9 @@ export default function AccountsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Comptes Instagram</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Instagram Accounts</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Gérez vos comptes Instagram connectés. La connexion passe par Facebook (exigé par Instagram pour les comptes Pro).
+            Manage your connected Instagram accounts. Connecting requires Facebook authorization (required for professional Instagram accounts).
           </p>
         </div>
         <ConnectAccountButton />
@@ -92,6 +100,9 @@ export default function AccountsPage() {
         error={error}
         onRetry={refetch}
         onConnect={handleConnect}
+        canManage={canManage}
+        onDisconnect={disconnect}
+        onRefreshToken={refreshToken}
       />
     </div>
   );

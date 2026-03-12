@@ -6,6 +6,12 @@ import type { MetaError } from '../types/meta.types';
 
 const GRAPH_API_BASE = 'https://graph.facebook.com/v21.0';
 
+let lastAppUsage: { call_count: number; total_cputime: number; total_time: number } | null = null;
+
+export function getLastAppUsage(): { call_count: number; total_cputime: number; total_time: number } | null {
+  return lastAppUsage;
+}
+
 const metaClient = axios.create({
   baseURL: GRAPH_API_BASE,
   timeout: 30_000,
@@ -34,6 +40,8 @@ function checkRateLimitHeaders(response: AxiosResponse): void {
       const callCount = usage.call_count ?? 0;
       const totalCpuTime = usage.total_cputime ?? 0;
       const totalTime = usage.total_time ?? 0;
+
+      lastAppUsage = { call_count: callCount, total_cputime: totalCpuTime, total_time: totalTime };
 
       if (callCount > 80 || totalCpuTime > 80 || totalTime > 80) {
         logger.warn({ appUsage: usage }, 'Meta API app usage approaching rate limit');
@@ -236,6 +244,53 @@ export async function refreshLongLivedToken(
 
     logger.debug({ expiresIn: response.data.expires_in }, 'Refreshed long-lived token');
     return response.data;
+  } catch (error) {
+    handleMetaError(error);
+  }
+}
+
+export async function getAccountInsights(
+  igUserId: string,
+  accessToken: string,
+  since: Date,
+  until: Date,
+): Promise<Array<{ name: string; period: string; values: Array<{ value: number; end_time: string }> }>> {
+  logger.debug({ igUserId }, 'Fetching account insights');
+
+  try {
+    const response = await metaClient.get(`/${igUserId}/insights`, {
+      params: {
+        metric: 'impressions,reach,profile_views',
+        period: 'day',
+        since: Math.floor(since.getTime() / 1000),
+        until: Math.floor(until.getTime() / 1000),
+        access_token: accessToken,
+      },
+    });
+
+    logger.debug({ igUserId }, 'Fetched account insights');
+    return response.data.data ?? [];
+  } catch (error) {
+    handleMetaError(error);
+  }
+}
+
+export async function getMediaInsights(
+  mediaId: string,
+  accessToken: string,
+): Promise<Array<{ name: string; values: Array<{ value: number }> }>> {
+  logger.debug({ mediaId }, 'Fetching media insights');
+
+  try {
+    const response = await metaClient.get(`/${mediaId}/insights`, {
+      params: {
+        metric: 'like_count,comments_count,saved,reach,impressions',
+        access_token: accessToken,
+      },
+    });
+
+    logger.debug({ mediaId }, 'Fetched media insights');
+    return response.data.data ?? [];
   } catch (error) {
     handleMetaError(error);
   }

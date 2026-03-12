@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { Instagram, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { ROUTES } from '../lib/constants';
+import { extractErrorMessage } from '../lib/errorUtils';
 
 export default function LoginPage() {
   const { user, login } = useAuth();
@@ -30,8 +31,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || err.response?.data?.message || 'Invalid email or password');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Invalid email or password'));
     } finally {
       setLoading(false);
     }

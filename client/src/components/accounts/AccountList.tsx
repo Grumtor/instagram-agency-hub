@@ -11,6 +11,9 @@ interface AccountListProps {
   error: string | null;
   onRetry: () => void;
   onConnect: () => void;
+  canManage?: boolean;
+  onDisconnect?: (accountId: string) => Promise<void>;
+  onRefreshToken?: (accountId: string) => Promise<void>;
 }
 
 export function AccountList({
@@ -19,6 +22,9 @@ export function AccountList({
   error,
   onRetry,
   onConnect,
+  canManage = false,
+  onDisconnect,
+  onRefreshToken,
 }: AccountListProps) {
   if (loading) return <LoadingSpinner text="Loading accounts..." />;
   if (error) return <ErrorAlert message={error} onRetry={onRetry} />;
@@ -26,9 +32,9 @@ export function AccountList({
     return (
       <EmptyState
         icon={Users}
-        title="Aucun compte Instagram connecté"
-        description="Connectez votre premier compte Instagram pour gérer vos publications. Vous serez redirigé vers Facebook pour autoriser l'accès (obligatoire pour les comptes Instagram professionnels)."
-        action={{ label: 'Connecter un compte Instagram', onClick: onConnect }}
+        title="No Instagram accounts connected"
+        description="Connect your first Instagram account to manage your publications and messages."
+        action={{ label: 'Connect an Instagram account', onClick: onConnect }}
       />
     );
   }
@@ -36,7 +42,13 @@ export function AccountList({
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {accounts.map((account) => (
-        <AccountCard key={account.id} account={account} />
+        <AccountCard
+          key={account.id}
+          account={account}
+          canManage={canManage}
+          onDisconnect={onDisconnect}
+          onRefreshToken={onRefreshToken}
+        />
       ))}
     </div>
   );
