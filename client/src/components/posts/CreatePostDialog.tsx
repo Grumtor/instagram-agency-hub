@@ -48,7 +48,7 @@ export function CreatePostDialog({
       setError('Please select an account');
       return;
     }
-    if (!caption.trim()) {
+    if (type !== 'STORY' && !caption.trim()) {
       setError('Caption is required');
       return;
     }
@@ -153,7 +153,7 @@ export function CreatePostDialog({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Caption
+              Caption{type === 'STORY' ? ' (optional)' : ''}
             </label>
             <textarea
               value={caption}

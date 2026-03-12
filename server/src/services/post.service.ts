@@ -2,11 +2,8 @@ import { prisma } from '../config/database';
 import { NotFoundError, AppError } from '../utils/errors';
 import { PostStatus, AuditAction } from '../types/enums';
 import { createAuditLog } from './auditLog.service';
+import { safeParseMediaUrls } from '../utils/safeJson';
 import type { CreatePostInput, UpdatePostInput } from '../validators/post.validator';
-
-function parseMediaUrls(raw: string): string[] {
-  return JSON.parse(raw);
-}
 
 export async function createPost(
   data: CreatePostInput & { workspaceId: string; createdById: string },
@@ -28,7 +25,7 @@ export async function createPost(
       igAccountId: data.igAccountId,
       type: data.type,
       caption: data.caption ?? null,
-      mediaUrls: JSON.stringify(data.mediaUrls),
+      mediaUrls: data.mediaUrls,
       thumbnailUrl: data.thumbnailUrl ?? null,
       scheduledAt,
       status,
@@ -49,7 +46,7 @@ export async function createPost(
     { type: data.type, status },
   );
 
-  return { ...post, mediaUrls: parseMediaUrls(post.mediaUrls) };
+  return { ...post, mediaUrls: safeParseMediaUrls(post.mediaUrls) };
 }
 
 export async function getPosts(
@@ -80,7 +77,7 @@ export async function getPosts(
   ]);
 
   return {
-    posts: posts.map((p) => ({ ...p, mediaUrls: parseMediaUrls(p.mediaUrls) })),
+    posts: posts.map((p) => ({ ...p, mediaUrls: safeParseMediaUrls(p.mediaUrls) })),
     total,
     pagination: {
       page,
@@ -104,7 +101,7 @@ export async function getPostById(postId: string, workspaceId: string) {
     throw new NotFoundError('Post');
   }
 
-  return { ...post, mediaUrls: parseMediaUrls(post.mediaUrls) };
+  return { ...post, mediaUrls: safeParseMediaUrls(post.mediaUrls) };
 }
 
 export async function updatePost(
@@ -139,7 +136,7 @@ export async function updatePost(
 
   if (data.type !== undefined) updateData.type = data.type;
   if (data.caption !== undefined) updateData.caption = data.caption;
-  if (data.mediaUrls !== undefined) updateData.mediaUrls = JSON.stringify(data.mediaUrls);
+  if (data.mediaUrls !== undefined) updateData.mediaUrls = data.mediaUrls;
   if (data.thumbnailUrl !== undefined) updateData.thumbnailUrl = data.thumbnailUrl;
 
   if (data.scheduledAt !== undefined) {
@@ -173,7 +170,7 @@ export async function updatePost(
     data as Record<string, unknown>,
   );
 
-  return { ...post, mediaUrls: parseMediaUrls(post.mediaUrls) };
+  return { ...post, mediaUrls: safeParseMediaUrls(post.mediaUrls) };
 }
 
 export async function deletePost(postId: string, workspaceId: string, userId: string) {
@@ -202,29 +199,24 @@ export async function deletePost(postId: string, workspaceId: string, userId: st
 }
 
 export async function publishNow(postId: string, workspaceId: string, userId: string) {
-  const existing = await prisma.post.findFirst({
+  const post = await prisma.post.findFirst({
     where: { id: postId, workspaceId },
-  });
-
-  if (!existing) {
-    throw new NotFoundError('Post');
-  }
-
-  if (
-    existing.status !== PostStatus.DRAFT &&
-    existing.status !== PostStatus.SCHEDULED
-  ) {
-    throw new AppError('Can only publish posts with DRAFT or SCHEDULED status', 400);
-  }
-
-  const post = await prisma.post.update({
-    where: { id: postId },
-    data: { status: PostStatus.PUBLISHING },
     include: {
       igAccount: { select: { id: true, igUsername: true } },
       createdBy: { select: { id: true, email: true, name: true } },
     },
   });
+
+  if (!post) {
+    throw new NotFoundError('Post');
+  }
+
+  if (
+    post.status !== PostStatus.DRAFT &&
+    post.status !== PostStatus.SCHEDULED
+  ) {
+    throw new AppError('Can only publish posts with DRAFT or SCHEDULED status', 400);
+  }
 
   await createAuditLog(
     workspaceId,
@@ -235,5 +227,5 @@ export async function publishNow(postId: string, workspaceId: string, userId: st
     { action: 'publish_now' },
   );
 
-  return { ...post, mediaUrls: parseMediaUrls(post.mediaUrls) };
+  return { ...post, mediaUrls: safeParseMediaUrls(post.mediaUrls) };
 }

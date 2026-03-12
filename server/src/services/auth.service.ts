@@ -1,10 +1,12 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/database';
 import { config } from '../config';
 import { UnauthorizedError, ValidationError } from '../utils/errors';
 import { MemberRole, AuditAction } from '../types/enums';
 import { createAuditLog } from './auditLog.service';
+import { logger } from '../utils/logger';
 
 interface TokenPair {
   accessToken: string;
@@ -30,8 +32,16 @@ export async function seedAdminIfEmpty(): Promise<void> {
   }
 
   const email = 'admin@agency.com';
-  const password = 'Admin123!';
   const name = 'Admin';
+
+  let password: string;
+  if (process.env.ADMIN_SEED_PASSWORD) {
+    password = process.env.ADMIN_SEED_PASSWORD;
+  } else if (config.isProd) {
+    password = crypto.randomUUID();
+  } else {
+    password = 'Admin123!';
+  }
 
   const passwordHash = await bcrypt.hash(password, 12);
 
@@ -53,9 +63,15 @@ export async function seedAdminIfEmpty(): Promise<void> {
 
   console.log('============================================');
   console.log('[seed] Admin account created:');
-  console.log(`  Email:    ${email}`);
-  console.log(`  Password: ${password}`);
-  console.log('  >>> CHANGE THIS PASSWORD AFTER FIRST LOGIN <<<');
+  console.log(`  Email: ${email}`);
+  if (process.env.ADMIN_SEED_PASSWORD) {
+    console.log('  Password: (set via ADMIN_SEED_PASSWORD env var)');
+  } else if (config.isProd) {
+    console.log(`  Password: ${password}`);
+    console.log('  >>> This is a one-time random password. Set ADMIN_SEED_PASSWORD for control. <<<');
+  } else {
+    console.log('  Password: (dev default -- see source)');
+  }
   console.log('============================================');
 }
 
@@ -91,7 +107,7 @@ export async function register(email: string, password: string, name: string): P
     user.id,
   );
 
-  const tokens = generateTokens({ id: user.id, email: user.email, name: user.name });
+  const tokens = await generateTokens({ id: user.id, email: user.email, name: user.name });
 
   return {
     user: { id: user.id, email: user.email, name: user.name },
@@ -125,7 +141,7 @@ export async function login(email: string, password: string): Promise<AuthResult
     );
   }
 
-  const tokens = generateTokens({ id: user.id, email: user.email, name: user.name });
+  const tokens = await generateTokens({ id: user.id, email: user.email, name: user.name });
 
   return {
     user: { id: user.id, email: user.email, name: user.name },
@@ -133,7 +149,25 @@ export async function login(email: string, password: string): Promise<AuthResult
   };
 }
 
-export function generateTokens(user: AuthUser): TokenPair {
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function parseExpiryToMs(expiry: string): number {
+  const match = expiry.match(/^(\d+)([smhd])$/);
+  if (!match) return 7 * 24 * 60 * 60 * 1000; // default 7 days
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+  switch (unit) {
+    case 's': return value * 1000;
+    case 'm': return value * 60 * 1000;
+    case 'h': return value * 60 * 60 * 1000;
+    case 'd': return value * 24 * 60 * 60 * 1000;
+    default: return 7 * 24 * 60 * 60 * 1000;
+  }
+}
+
+export async function generateTokens(user: AuthUser, familyId?: string): Promise<TokenPair> {
   const accessOpts: jwt.SignOptions = { expiresIn: config.jwt.accessExpiry as unknown as jwt.SignOptions['expiresIn'] };
   const accessToken = jwt.sign(
     { id: user.id, email: user.email, name: user.name },
@@ -148,6 +182,19 @@ export function generateTokens(user: AuthUser): TokenPair {
     refreshOpts,
   );
 
+  const tokenHash = hashToken(refreshToken);
+  const resolvedFamilyId = familyId || crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + parseExpiryToMs(config.jwt.refreshExpiry));
+
+  await prisma.refreshToken.create({
+    data: {
+      userId: user.id,
+      tokenHash,
+      familyId: resolvedFamilyId,
+      expiresAt,
+    },
+  });
+
   return { accessToken, refreshToken };
 }
 
@@ -160,7 +207,34 @@ export async function verifyRefreshToken(token: string): Promise<AuthResult> {
       throw new UnauthorizedError('User not found');
     }
 
-    const tokens = generateTokens({ id: user.id, email: user.email, name: user.name });
+    const tokenHash = hashToken(token);
+    const record = await prisma.refreshToken.findUnique({ where: { tokenHash } });
+
+    if (!record) {
+      throw new UnauthorizedError('Refresh token not recognized');
+    }
+
+    if (record.isRevoked) {
+      // Replay detected: revoke entire token family
+      await prisma.refreshToken.updateMany({
+        where: { familyId: record.familyId },
+        data: { isRevoked: true },
+      });
+      logger.warn({ userId: user.id, familyId: record.familyId }, 'Refresh token replay detected, revoking family');
+      throw new UnauthorizedError('Refresh token has been revoked (possible token theft detected)');
+    }
+
+    // Mark current token as revoked (single-use)
+    await prisma.refreshToken.update({
+      where: { id: record.id },
+      data: { isRevoked: true },
+    });
+
+    // Generate new token pair in the same family
+    const tokens = await generateTokens(
+      { id: user.id, email: user.email, name: user.name },
+      record.familyId,
+    );
 
     return {
       user: { id: user.id, email: user.email, name: user.name },
@@ -172,4 +246,69 @@ export async function verifyRefreshToken(token: string): Promise<AuthResult> {
     }
     throw new UnauthorizedError('Invalid or expired refresh token');
   }
+}
+
+export async function revokeAllUserTokens(userId: string): Promise<void> {
+  await prisma.refreshToken.updateMany({
+    where: { userId, isRevoked: false },
+    data: { isRevoked: true },
+  });
+}
+
+export async function logout(userId: string, refreshToken?: string): Promise<void> {
+  if (refreshToken) {
+    const tokenHash = hashToken(refreshToken);
+    const record = await prisma.refreshToken.findUnique({ where: { tokenHash } });
+    if (record) {
+      // Revoke the entire token family
+      await prisma.refreshToken.updateMany({
+        where: { familyId: record.familyId },
+        data: { isRevoked: true },
+      });
+    }
+  } else {
+    await revokeAllUserTokens(userId);
+  }
+}
+
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ message: string }> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new UnauthorizedError('User not found');
+  }
+
+  const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!isValid) {
+    throw new UnauthorizedError('Current password is incorrect');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash },
+  });
+
+  // Revoke all refresh tokens (force re-login on all devices)
+  await revokeAllUserTokens(userId);
+
+  // Create audit log entry
+  const memberships = await prisma.workspaceMember.findMany({
+    where: { userId },
+    take: 1,
+  });
+  if (memberships.length > 0) {
+    await createAuditLog(
+      memberships[0].workspaceId,
+      userId,
+      AuditAction.PASSWORD_CHANGED,
+      'User',
+      userId,
+    );
+  }
+
+  return { message: 'Password changed successfully' };
 }

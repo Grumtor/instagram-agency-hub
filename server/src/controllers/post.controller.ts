@@ -4,6 +4,7 @@ import { successResponse } from '../utils/apiResponse';
 import { UnauthorizedError, ValidationError } from '../utils/errors';
 import { config } from '../config';
 import { processPost } from '../workers/publishWorker';
+import { logger } from '../utils/logger';
 import type { CreatePostInput, UpdatePostInput } from '../validators/post.validator';
 
 export async function createPost(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -87,7 +88,9 @@ export async function publishNow(req: Request, res: Response, next: NextFunction
       req.params.workspaceId as string,
       req.user.id,
     );
-    processPost(req.params.postId as string).catch(() => {});
+    processPost(req.params.postId as string).catch((err) => {
+      logger.error({ err, postId: req.params.postId }, 'Background publish failed');
+    });
     successResponse(res, post);
   } catch (error) {
     next(error);

@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
 import { PostStatus } from '../types/enums';
+import { safeParseMediaUrls } from '../utils/safeJson';
 
 export async function getStats(workspaceId: string) {
   const [
@@ -39,7 +40,7 @@ export async function getStats(workspaceId: string) {
     draftCount,
     recentPosts: recentPosts.map((p) => ({
       ...p,
-      mediaUrls: JSON.parse(p.mediaUrls),
+      mediaUrls: safeParseMediaUrls(p.mediaUrls),
     })),
   };
 }

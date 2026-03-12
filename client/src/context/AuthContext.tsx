@@ -13,7 +13,7 @@ export interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -67,9 +67,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
   };
 
-  const logout = () => {
-    clearTokens();
-    setUser(null);
+  const logout = async () => {
+    try {
+      const refreshToken = localStorage.getItem('iah_refresh_token');
+      await api.post('/api/auth/logout', { refreshToken });
+    } catch {
+      // Best-effort: server-side invalidation may fail if token is expired
+    } finally {
+      clearTokens();
+      setUser(null);
+    }
   };
 
   return (

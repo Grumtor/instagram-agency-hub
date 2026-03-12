@@ -37,6 +37,16 @@ api.interceptors.response.use((response) => {
   return response;
 });
 
+export async function fetchAuthenticatedBlob(url: string): Promise<string> {
+  const token = getAccessToken();
+  const response = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) throw new Error(`Failed to fetch media: ${response.status}`);
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
+
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value: unknown) => void;

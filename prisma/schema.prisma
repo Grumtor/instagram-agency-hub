@@ -19,6 +19,7 @@ model User {
   workspaceMembers WorkspaceMember[]
   posts            Post[]
   auditLogs        AuditLog[]
+  refreshTokens    RefreshToken[]
 }
 
 model Workspace {
@@ -82,7 +83,7 @@ model Post {
   igAccountId  String
   type         String
   caption      String?  @db.Text
-  mediaUrls    String   @db.Text
+  mediaUrls    Json
   thumbnailUrl String?
   scheduledAt  DateTime?
   publishedAt  DateTime?
@@ -139,4 +140,29 @@ model Message {
 
   @@index([workspaceId, igAccountId, conversationId])
   @@index([conversationId, sentAt])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  familyId  String
+  isRevoked Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+}
+
+model ConsumedOAuthState {
+  id         String   @id @default(cuid())
+  stateHash  String   @unique
+  consumedAt DateTime @default(now())
+  expiresAt  DateTime
+
+  @@index([expiresAt])
 }

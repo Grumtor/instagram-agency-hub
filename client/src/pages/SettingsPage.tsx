@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Save, UserPlus, Settings } from 'lucide-react';
+import { Save, UserPlus, Settings, Lock } from 'lucide-react';
 import { api } from '../lib/api';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { ROLE_LABELS } from '../lib/constants';
@@ -9,7 +9,7 @@ import { EmptyState } from '../components/common/EmptyState';
 import type { WorkspaceMember } from '../types';
 import { cn } from '../lib/utils';
 
-type Tab = 'general' | 'members';
+type Tab = 'general' | 'members' | 'security';
 
 export default function SettingsPage() {
   const { currentWorkspace, refreshWorkspaces } = useWorkspace();
@@ -26,7 +26,7 @@ export default function SettingsPage() {
 
       <div className="border-b border-gray-200">
         <nav className="flex gap-6">
-          {(['general', 'members'] as Tab[]).map((tab) => (
+          {(['general', 'members', 'security'] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -48,8 +48,10 @@ export default function SettingsPage() {
           workspace={currentWorkspace}
           onUpdated={refreshWorkspaces}
         />
-      ) : (
+      ) : activeTab === 'members' ? (
         <MembersTab workspaceId={currentWorkspace?.id} />
+      ) : (
+        <SecurityTab />
       )}
     </div>
   );
@@ -282,6 +284,119 @@ function MembersTab({ workspaceId }: { workspaceId?: string }) {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function SecurityTab() {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (newPassword.length < 8) {
+      setError('New password must be at least 8 characters');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('New passwords do not match');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await api.patch('/api/auth/password', { currentPassword, newPassword });
+      setSuccess('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to change password');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="max-w-lg">
+      <div className="rounded-xl border border-gray-200 bg-white p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Lock className="h-5 w-5 text-gray-600" />
+          <h3 className="text-base font-semibold text-gray-900">
+            Change Password
+          </h3>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            {success}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Current Password
+            </label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              New Password
+            </label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              minLength={8}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              required
+            />
+            <p className="mt-1 text-xs text-gray-500">Minimum 8 characters</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Confirm New Password
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              minLength={8}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={saving || !currentPassword || !newPassword || !confirmPassword}
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          >
+            <Lock className="h-4 w-4" />
+            {saving ? 'Changing...' : 'Change Password'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

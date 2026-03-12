@@ -96,8 +96,28 @@ export function verifyState(state: string): { workspaceId: string; userId: strin
   return { workspaceId: payload.workspaceId, userId: payload.userId };
 }
 
+async function consumeState(state: string): Promise<{ workspaceId: string; userId: string }> {
+  const payload = verifyAndDecodeState(state);
+
+  const stateHash = crypto.createHash('sha256').update(state).digest('hex');
+
+  const consumed = await prisma.consumedOAuthState.findUnique({ where: { stateHash } });
+  if (consumed) {
+    throw new ValidationError('OAuth state has already been used');
+  }
+
+  await prisma.consumedOAuthState.create({
+    data: {
+      stateHash,
+      expiresAt: new Date(Date.now() + STATE_MAX_AGE_MS),
+    },
+  });
+
+  return { workspaceId: payload.workspaceId, userId: payload.userId };
+}
+
 export async function handleCallback(code: string, state: string): Promise<ConnectedAccount[]> {
-  const { workspaceId, userId } = verifyState(state);
+  const { workspaceId, userId } = await consumeState(state);
 
   logger.info({ workspaceId, userId }, 'Processing Instagram OAuth callback');
 
