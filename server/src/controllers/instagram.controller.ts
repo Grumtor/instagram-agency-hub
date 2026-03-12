@@ -47,8 +47,13 @@ export async function handleCallback(req: Request, res: Response, next: NextFunc
       throw new ValidationError('Missing code or state parameter');
     }
 
-    await instagramOAuthService.handleCallback(code, state);
-    res.redirect(`${config.clientUrl}/accounts?connected=true`);
+    const connectedAccounts = await instagramOAuthService.handleCallback(code, state);
+
+    if (connectedAccounts.length > 0) {
+      res.redirect(`${config.clientUrl}/accounts?connected=${connectedAccounts.length}`);
+    } else {
+      res.redirect(`${config.clientUrl}/accounts?error=no_instagram_account`);
+    }
   } catch (error) {
     logger.error({ error }, 'Instagram OAuth callback failed');
     const message = error instanceof Error ? error.message : 'Unknown error';
