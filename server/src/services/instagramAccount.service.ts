@@ -18,6 +18,7 @@ interface InstagramAccountSafe {
   tokenExpiresAt: Date | null;
   lastTokenRefresh: Date | null;
   pageId: string | null;
+  permissions: string[];
 }
 
 type TokenStatus = 'valid' | 'expiring_soon' | 'expired' | 'unknown';
@@ -40,6 +41,7 @@ function toSafeAccount(account: {
   tokenExpiresAt: Date | null;
   lastTokenRefresh: Date | null;
   pageId: string | null;
+  permissions: string;
 }): InstagramAccountSafe {
   return {
     id: account.id,
@@ -52,6 +54,7 @@ function toSafeAccount(account: {
     tokenExpiresAt: account.tokenExpiresAt,
     lastTokenRefresh: account.lastTokenRefresh,
     pageId: account.pageId,
+    permissions: account.permissions ? account.permissions.split(',') : [],
   };
 }
 

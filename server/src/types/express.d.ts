@@ -13,5 +13,6 @@ declare namespace Express {
       id: string;
       role: string;
     };
+    rawBody?: Buffer;
   }
 }

@@ -14,6 +14,11 @@ export const addMemberSchema = z.object({
   role: z.enum([MemberRole.ADMIN, MemberRole.MEMBER]).default(MemberRole.MEMBER),
 });
 
+export const updateMemberRoleSchema = z.object({
+  role: z.enum([MemberRole.ADMIN, MemberRole.MEMBER]),
+});
+
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 export type UpdateWorkspaceInput = z.infer<typeof updateWorkspaceSchema>;
 export type AddMemberInput = z.infer<typeof addMemberSchema>;
+export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;

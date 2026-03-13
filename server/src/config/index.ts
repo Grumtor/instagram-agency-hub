@@ -45,6 +45,8 @@ const envSchema = z.object({
   UPLOAD_DIR: z.string().default('./uploads'),
   MAX_FILE_SIZE_MB: z.coerce.number().default(100),
   PUBLIC_UPLOAD_URL: z.string().default(''),
+
+  ADMIN_SEED_PASSWORD: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -59,6 +61,20 @@ const data = parsed.data;
 
 // Force production on Railway regardless of NODE_ENV value
 const env = isRailway ? 'production' as const : data.NODE_ENV;
+
+// In production, refuse to start with auto-derived secrets (AC-4)
+if (env === 'production') {
+  const missingSecrets: string[] = [];
+  if (data.JWT_ACCESS_SECRET === autoJwtAccess) missingSecrets.push('JWT_ACCESS_SECRET');
+  if (data.JWT_REFRESH_SECRET === autoJwtRefresh) missingSecrets.push('JWT_REFRESH_SECRET');
+  if (data.ENCRYPTION_KEY === autoEncryption) missingSecrets.push('ENCRYPTION_KEY');
+  if (data.OAUTH_STATE_SECRET === autoOauthState) missingSecrets.push('OAUTH_STATE_SECRET');
+  if (missingSecrets.length > 0) {
+    console.error(`[Config] FATAL: Production requires explicit secrets. Missing: ${missingSecrets.join(', ')}`);
+    console.error('[Config] Set these environment variables to unique, random values.');
+    process.exit(1);
+  }
+}
 
 const railwayDomain = data.RAILWAY_PUBLIC_DOMAIN;
 const publicBase = railwayDomain ? `https://${railwayDomain}` : `http://localhost:${data.PORT}`;

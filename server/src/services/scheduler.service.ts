@@ -22,15 +22,20 @@ function startScheduler(): void {
         logger.info({ count: posts.length }, 'Processing scheduled posts');
       }
 
-      for (const post of posts) {
-        try {
-          await processPost(post.id);
-        } catch (error) {
-          logger.error(
-            { error, postId: post.id },
-            'Failed to process scheduled post',
-          );
+      const CONCURRENCY_LIMIT = 5;
+      for (let i = 0; i < posts.length; i += CONCURRENCY_LIMIT) {
+        const batch = posts.slice(i, i + CONCURRENCY_LIMIT);
+        const results = await Promise.allSettled(
+          batch.map((post) => processPost(post.id))
+        );
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            logger.error({ error: result.reason }, 'Failed to process scheduled post in batch');
+          }
         }
+      }
+      if (posts.length > CONCURRENCY_LIMIT) {
+        logger.info({ total: posts.length, concurrency: CONCURRENCY_LIMIT }, 'Processed posts in batches');
       }
     } catch (error) {
       logger.error({ error }, 'Scheduler: error querying scheduled posts');
@@ -96,6 +101,27 @@ function startScheduler(): void {
       }
     } catch (error) {
       logger.error({ error }, 'Scheduler: error in token refresh job');
+    }
+  });
+
+  // Daily cleanup: expired refresh tokens and consumed OAuth states
+  cron.schedule('0 4 * * *', async () => {
+    try {
+      const now = new Date();
+      const deletedTokens = await prisma.refreshToken.deleteMany({
+        where: { expiresAt: { lt: now } },
+      });
+      const deletedStates = await prisma.consumedOAuthState.deleteMany({
+        where: { expiresAt: { lt: now } },
+      });
+      if (deletedTokens.count > 0 || deletedStates.count > 0) {
+        logger.info(
+          { deletedTokens: deletedTokens.count, deletedStates: deletedStates.count },
+          'Cleaned up expired tokens and OAuth states',
+        );
+      }
+    } catch (error) {
+      logger.error({ error }, 'Scheduler: error in cleanup job');
     }
   });
 

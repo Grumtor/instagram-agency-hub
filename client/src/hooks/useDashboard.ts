@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import type { DashboardStats } from '../types';
 import { useWorkspace } from './useWorkspace';
+import { extractErrorMessage } from '../lib/errorUtils';
 
 const defaultStats: DashboardStats = {
   totalAccounts: 0,
@@ -12,6 +13,7 @@ const defaultStats: DashboardStats = {
   failedCount: 0,
   draftCount: 0,
   recentPosts: [],
+  accountInsights: [],
 };
 
 export function useDashboard() {
@@ -29,8 +31,8 @@ export function useDashboard() {
         `/api/workspaces/${currentWorkspace.id}/dashboard/stats`
       );
       setStats(data);
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to load dashboard');
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Failed to load dashboard'));
     } finally {
       setLoading(false);
     }

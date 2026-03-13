@@ -4,17 +4,20 @@ export interface User {
   name: string;
 }
 
+export type MemberRole = 'OWNER' | 'ADMIN' | 'MEMBER';
+
 export interface Workspace {
   id: string;
   name: string;
   createdAt: string;
+  role: MemberRole;
 }
 
 export interface WorkspaceMember {
   id: string;
   userId: string;
   workspaceId: string;
-  role: 'OWNER' | 'ADMIN' | 'MEMBER';
+  role: MemberRole;
   user?: User;
 }
 
@@ -28,6 +31,32 @@ export interface InstagramAccount {
   connectedAt: string;
   permissions: string[];
   tokenStatus?: 'valid' | 'expiring_soon' | 'expired' | 'unknown';
+}
+
+export interface PostInsightSummary {
+  likeCount: number;
+  commentCount: number;
+  savedCount: number;
+  engagementRate: number;
+}
+
+export interface AccountInsightDataPoint {
+  date: string;
+  impressions: number;
+  reach: number;
+  profileViews: number;
+  followerCount: number;
+}
+
+export interface AccountInsightSummary {
+  igAccountId: string;
+  igUsername: string;
+  followerCount: number | null;
+  reach: number | null;
+  impressions: number | null;
+  profileViews: number | null;
+  date: string | null;
+  series?: AccountInsightDataPoint[];
 }
 
 export type PostStatus = 'DRAFT' | 'SCHEDULED' | 'PUBLISHING' | 'PUBLISHED' | 'FAILED';
@@ -46,10 +75,11 @@ export interface Post {
   status: PostStatus;
   igPostId?: string;
   igPermalink?: string;
-  errorMessage?: string;
+  errorMessage?: string | null;
   retryCount: number;
   createdBy?: User;
   igAccount?: InstagramAccount;
+  insight?: PostInsightSummary | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -87,6 +117,7 @@ export interface DashboardStats {
   failedCount: number;
   draftCount: number;
   recentPosts: Post[];
+  accountInsights: AccountInsightSummary[];
 }
 
 export interface ApiError {

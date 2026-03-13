@@ -6,9 +6,7 @@ export const createPostSchema = z
     igAccountId: z.string().min(1, 'Instagram account ID is required'),
     type: z.enum([PostType.POST, PostType.STORY, PostType.REEL, PostType.CAROUSEL]),
     caption: z.string().max(2200, 'Caption must be 2200 characters or less').optional(),
-    mediaUrls: z
-      .array(z.string().url('Each media URL must be a valid URL'))
-      .min(1, 'At least one media URL is required'),
+    mediaUrls: z.array(z.string().url('Each media URL must be a valid URL')).default([]),
     thumbnailUrl: z.string().url('Thumbnail URL must be a valid URL').optional(),
     scheduledAt: z
       .string()
@@ -26,6 +24,19 @@ export const createPostSchema = z
     },
     {
       message: 'Carousel posts require between 2 and 10 media URLs',
+      path: ['mediaUrls'],
+    },
+  )
+  .refine(
+    (data) => {
+      // A scheduled post must have at least one media URL
+      if (data.scheduledAt && data.mediaUrls.length === 0) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'Scheduled posts require at least one media URL',
       path: ['mediaUrls'],
     },
   );

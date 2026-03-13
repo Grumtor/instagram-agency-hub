@@ -6,7 +6,9 @@ import path from 'path';
 import { config } from './config';
 import { globalLimiter } from './middleware/rateLimiter';
 import { errorHandler } from './middleware/errorHandler';
+import { requireAuth } from './middleware/auth';
 import routes from './routes';
+import webhookRoutes from './routes/webhook.routes';
 
 const app = express();
 
@@ -25,11 +27,21 @@ app.use(cors({
   credentials: true,
 }));
 app.use(morgan(config.isDev ? 'dev' : 'combined'));
+
+// Mount webhook routes BEFORE global JSON parser so we can capture raw body
+app.use('/api/webhooks', express.json({
+  limit: '10mb',
+  verify: (req: any, _res: any, buf: Buffer) => {
+    req.rawBody = buf;
+  },
+}), webhookRoutes);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(globalLimiter);
 
-app.use('/uploads', express.static(path.resolve(config.upload.dir)));
+// Serve uploads with authentication (AC-3)
+app.use('/uploads', requireAuth, express.static(path.resolve(config.upload.dir)));
 
 app.use('/api', routes);
 

@@ -112,6 +112,8 @@ export async function publishPhoto(
     access_token: accessToken,
   });
 
+  await pollContainerStatus(container.id as string, accessToken);
+
   const published = await metaPost(`/${igUserId}/media_publish`, {
     creation_id: container.id as string,
     access_token: accessToken,
@@ -141,6 +143,7 @@ export async function publishCarousel(
       is_carousel_item: 'true',
       access_token: accessToken,
     });
+    await pollContainerStatus(child.id as string, accessToken);
     childIds.push(child.id as string);
   }
 
@@ -150,6 +153,8 @@ export async function publishCarousel(
     caption,
     access_token: accessToken,
   });
+
+  await pollContainerStatus(container.id as string, accessToken);
 
   const published = await metaPost(`/${igUserId}/media_publish`, {
     creation_id: container.id as string,

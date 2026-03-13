@@ -1,7 +1,11 @@
 import { prisma } from '../config/database';
 import { PostStatus } from '../types/enums';
+import { safeParseMediaUrls } from '../utils/safeJson';
+import { daysAgo } from '../utils/dateUtils';
 
 export async function getStats(workspaceId: string) {
+  const twentyEightDaysAgo = daysAgo(28);
+
   const [
     totalAccounts,
     activeAccounts,
@@ -11,6 +15,7 @@ export async function getStats(workspaceId: string) {
     failedCount,
     draftCount,
     recentPosts,
+    activeAccountsWithInsights,
   ] = await Promise.all([
     prisma.instagramAccount.count({ where: { workspaceId } }),
     prisma.instagramAccount.count({ where: { workspaceId, isActive: true } }),
@@ -27,7 +32,40 @@ export async function getStats(workspaceId: string) {
         igAccount: { select: { id: true, igUsername: true } },
       },
     }),
+    prisma.instagramAccount.findMany({
+      where: { workspaceId, isActive: true },
+      select: {
+        id: true,
+        igUsername: true,
+        accountInsights: {
+          where: { date: { gte: twentyEightDaysAgo } },
+          orderBy: { date: 'asc' },
+        },
+      },
+    }),
   ]);
+
+  const accountInsights = activeAccountsWithInsights.map((account) => {
+    const sorted = account.accountInsights;
+    const latest = sorted.length > 0 ? sorted[sorted.length - 1] : null;
+    const series = sorted.map((row) => ({
+      date: row.date.toISOString().split('T')[0],
+      impressions: row.impressions ?? 0,
+      reach: row.reach ?? 0,
+      profileViews: row.profileViews ?? 0,
+      followerCount: row.followerCount ?? 0,
+    }));
+    return {
+      igAccountId: account.id,
+      igUsername: account.igUsername,
+      followerCount: latest?.followerCount ?? null,
+      reach: latest?.reach ?? null,
+      impressions: latest?.impressions ?? null,
+      profileViews: latest?.profileViews ?? null,
+      date: latest?.date.toISOString() ?? null,
+      series,
+    };
+  });
 
   return {
     totalAccounts,
@@ -39,7 +77,8 @@ export async function getStats(workspaceId: string) {
     draftCount,
     recentPosts: recentPosts.map((p) => ({
       ...p,
-      mediaUrls: JSON.parse(p.mediaUrls),
+      mediaUrls: safeParseMediaUrls(p.mediaUrls),
     })),
+    accountInsights,
   };
 }

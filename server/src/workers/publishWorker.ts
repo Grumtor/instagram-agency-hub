@@ -4,30 +4,32 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 import { PostStatus, PostType, AuditAction } from '../types/enums';
 import { createAuditLog } from '../services/auditLog.service';
+import { safeParseMediaUrls } from '../utils/safeJson';
 import * as publisher from '../services/publisher.service';
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|avi|wmv|webm|mkv)$/i;
 
 export async function processPost(postId: string): Promise<void> {
+  // Atomic lock: only one worker can transition a post to PUBLISHING
+  const lockResult = await prisma.post.updateMany({
+    where: { id: postId, status: { in: [PostStatus.SCHEDULED, PostStatus.DRAFT] } },
+    data: { status: PostStatus.PUBLISHING },
+  });
+
+  if (lockResult.count === 0) {
+    logger.info({ postId }, 'Post not in publishable state (likely already processing), skipping');
+    return;
+  }
+
   const post = await prisma.post.findUnique({
     where: { id: postId },
     include: { igAccount: true },
   });
 
   if (!post) {
-    logger.error({ postId }, 'Post not found for publishing');
+    logger.error({ postId }, 'Post not found after lock');
     return;
   }
-
-  if (post.status === PostStatus.PUBLISHED) {
-    logger.info({ postId }, 'Post already published, skipping');
-    return;
-  }
-
-  await prisma.post.update({
-    where: { id: postId },
-    data: { status: PostStatus.PUBLISHING },
-  });
 
   try {
     const accessToken = decrypt(
@@ -37,7 +39,10 @@ export async function processPost(postId: string): Promise<void> {
       config.encryptionKey,
     );
 
-    const mediaUrls: string[] = JSON.parse(post.mediaUrls);
+    const mediaUrls = safeParseMediaUrls(post.mediaUrls);
+    if (mediaUrls.length === 0) {
+      throw new Error('Post has no media URLs');
+    }
     const caption = post.caption ?? '';
     const igUserId = post.igAccount.igUserId;
 

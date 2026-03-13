@@ -3,6 +3,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from 'react';
 import { api } from '../lib/api';
@@ -24,6 +25,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const currentWorkspaceRef = useRef(currentWorkspace);
+
+  useEffect(() => {
+    currentWorkspaceRef.current = currentWorkspace;
+  }, [currentWorkspace]);
 
   const refreshWorkspaces = useCallback(async () => {
     if (!user) return;
@@ -32,7 +38,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const { data } = await api.get('/api/workspaces');
       const list: Workspace[] = data.workspaces ?? data;
       setWorkspaces(list);
-      if (list.length > 0 && !currentWorkspace) {
+      if (list.length > 0 && !currentWorkspaceRef.current) {
         setCurrentWorkspace(list[0]);
       }
     } catch {
@@ -40,7 +46,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [user, currentWorkspace]);
+  }, [user]);
 
   useEffect(() => {
     refreshWorkspaces();

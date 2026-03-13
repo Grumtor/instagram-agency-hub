@@ -19,6 +19,7 @@ model User {
   workspaceMembers WorkspaceMember[]
   posts            Post[]
   auditLogs        AuditLog[]
+  refreshTokens    RefreshToken[]
 }
 
 model Workspace {
@@ -69,9 +70,10 @@ model InstagramAccount {
   pageAccessTokenIV        String?
   pageAccessTokenTag       String?
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  posts     Post[]
-  messages  Message[]
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  posts           Post[]
+  messages        Message[]
+  accountInsights AccountInsight[]
 
   @@index([workspaceId])
 }
@@ -82,7 +84,7 @@ model Post {
   igAccountId  String
   type         String
   caption      String?  @db.Text
-  mediaUrls    String   @db.Text
+  mediaUrls    Json
   thumbnailUrl String?
   scheduledAt  DateTime?
   publishedAt  DateTime?
@@ -92,13 +94,14 @@ model Post {
   errorMessage String?  @db.Text
   retryCount   Int       @default(0)
   maxRetries   Int       @default(3)
-  createdById  String
+  createdById  String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   igAccount InstagramAccount @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
-  createdBy User             @relation(fields: [createdById], references: [id])
+  createdBy User?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  insight   PostInsight?
 
   @@index([workspaceId])
   @@index([status, scheduledAt])
@@ -108,7 +111,7 @@ model Post {
 model AuditLog {
   id          String   @id @default(cuid())
   workspaceId String
-  userId      String
+  userId      String?
   action      String
   entityType  String
   entityId    String?
@@ -116,7 +119,7 @@ model AuditLog {
   createdAt   DateTime @default(now())
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id])
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
 }
@@ -139,4 +142,59 @@ model Message {
 
   @@index([workspaceId, igAccountId, conversationId])
   @@index([conversationId, sentAt])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  familyId  String
+  isRevoked Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+}
+
+model ConsumedOAuthState {
+  id         String   @id @default(cuid())
+  stateHash  String   @unique
+  consumedAt DateTime @default(now())
+  expiresAt  DateTime
+
+  @@index([expiresAt])
+}
+
+model AccountInsight {
+  id            String           @id @default(cuid())
+  igAccountId   String
+  date          DateTime
+  impressions   Int              @default(0)
+  reach         Int              @default(0)
+  profileViews  Int              @default(0)
+  followerCount Int              @default(0)
+  fetchedAt     DateTime         @default(now())
+
+  igAccount     InstagramAccount @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([igAccountId, date])
+  @@index([igAccountId])
+}
+
+model PostInsight {
+  id             String   @id @default(cuid())
+  postId         String   @unique
+  likeCount      Int      @default(0)
+  commentCount   Int      @default(0)
+  savedCount     Int      @default(0)
+  reach          Int      @default(0)
+  impressions    Int      @default(0)
+  engagementRate Float    @default(0)
+  fetchedAt      DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 }

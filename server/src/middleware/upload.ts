@@ -9,13 +9,32 @@ import { ValidationError } from '../utils/errors';
 const uploadDir = path.resolve(config.upload.dir);
 fs.mkdirSync(uploadDir, { recursive: true });
 
+function mimeToExt(mime: string): string {
+  const map: Record<string, string> = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'image/heic': '.heic',
+    'image/heif': '.heif',
+    'video/mp4': '.mp4',
+    'video/quicktime': '.mov',
+    'video/x-msvideo': '.avi',
+    'video/webm': '.webm',
+    'video/x-matroska': '.mkv',
+  };
+  return map[mime] || '.bin';
+}
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, uploadDir);
   },
   filename: (_req, file, cb) => {
     const uuid = crypto.randomUUID();
-    cb(null, `${uuid}-${file.originalname}`);
+    const rawExt = path.extname(file.originalname).replace(/[^a-zA-Z0-9.]/g, '');
+    const ext = rawExt || mimeToExt(file.mimetype);
+    cb(null, `${uuid}${ext}`);
   },
 });
 

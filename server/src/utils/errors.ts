@@ -38,6 +38,12 @@ export class ForbiddenError extends AppError {
   }
 }
 
+export class ConflictError extends AppError {
+  constructor(message = 'Conflict') {
+    super(message, 409);
+  }
+}
+
 export class MetaApiError extends AppError {
   public readonly metaCode: number;
   public readonly metaSubcode?: number;

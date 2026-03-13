@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import * as instagramOAuthService from '../services/instagramOAuth.service';
 import { successResponse } from '../utils/apiResponse';
-import { UnauthorizedError, ValidationError } from '../utils/errors';
+import { UnauthorizedError, ValidationError, ForbiddenError, ConflictError } from '../utils/errors';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+import { prisma } from '../config/database';
 
 export async function getAuthUrl(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -12,6 +13,14 @@ export async function getAuthUrl(req: Request, res: Response, next: NextFunction
     const workspaceId = req.query.workspaceId as string;
     if (!workspaceId) {
       throw new ValidationError('workspaceId query parameter is required');
+    }
+
+    // Verify user is a member of the workspace (AC-9)
+    const member = await prisma.workspaceMember.findUnique({
+      where: { userId_workspaceId: { userId: req.user.id, workspaceId } },
+    });
+    if (!member) {
+      throw new ForbiddenError('You are not a member of this workspace');
     }
 
     const url = instagramOAuthService.generateAuthUrl(workspaceId, req.user.id);
@@ -38,10 +47,19 @@ export async function handleCallback(req: Request, res: Response, next: NextFunc
       throw new ValidationError('Missing code or state parameter');
     }
 
-    await instagramOAuthService.handleCallback(code, state);
-    res.redirect(`${config.clientUrl}/accounts?connected=true`);
+    const connectedAccounts = await instagramOAuthService.handleCallback(code, state);
+
+    if (connectedAccounts.length > 0) {
+      res.redirect(`${config.clientUrl}/accounts?connected=${connectedAccounts.length}`);
+    } else {
+      res.redirect(`${config.clientUrl}/accounts?error=no_instagram_account`);
+    }
   } catch (error) {
     logger.error({ error }, 'Instagram OAuth callback failed');
+    if (error instanceof ConflictError) {
+      res.redirect(`${config.clientUrl}/accounts?error=account_already_connected_to_another_workspace`);
+      return;
+    }
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.redirect(`${config.clientUrl}/accounts?error=${encodeURIComponent(message)}`);
   }

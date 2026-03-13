@@ -48,5 +48,6 @@ export const AuditAction = {
   POST_FAILED: 'POST_FAILED',
   MESSAGE_SENT: 'MESSAGE_SENT',
   MESSAGE_RECEIVED: 'MESSAGE_RECEIVED',
+  PASSWORD_CHANGED: 'PASSWORD_CHANGED',
 } as const;
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];

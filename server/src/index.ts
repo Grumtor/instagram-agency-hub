@@ -79,6 +79,15 @@ async function bootstrap() {
       console.warn('[boot] Scheduler skipped:', String(e));
     }
 
+    // Step 6: Start insights cron
+    try {
+      const { startInsightsCron } = await import('./workers/insightsCron');
+      startInsightsCron();
+      console.log('[boot] Insights cron started');
+    } catch (e) {
+      console.warn('[boot] Insights cron skipped:', String(e));
+    }
+
     const { config } = await import('./config');
     console.log('============================================');
     console.log(`[boot] APP READY — ${config.env} mode`);

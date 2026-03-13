@@ -10,10 +10,12 @@ function verifySignature(req: Request): boolean {
   const signature = req.headers['x-hub-signature-256'] as string | undefined;
   if (!signature) return false;
 
-  const body = JSON.stringify(req.body);
+  const rawBody = req.rawBody;
+  if (!rawBody) return false;
+
   const expected =
     'sha256=' +
-    crypto.createHmac('sha256', config.meta.appSecret).update(body).digest('hex');
+    crypto.createHmac('sha256', config.meta.appSecret).update(rawBody).digest('hex');
 
   try {
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));

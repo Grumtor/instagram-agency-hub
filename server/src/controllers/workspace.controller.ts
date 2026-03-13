@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import * as workspaceService from '../services/workspace.service';
 import { successResponse } from '../utils/apiResponse';
 import { UnauthorizedError } from '../utils/errors';
-import type { CreateWorkspaceInput, UpdateWorkspaceInput, AddMemberInput } from '../validators/workspace.validator';
+import type { CreateWorkspaceInput, UpdateWorkspaceInput, AddMemberInput, UpdateMemberRoleInput } from '../validators/workspace.validator';
 
 export async function createWorkspace(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -61,6 +61,22 @@ export async function addMember(req: Request, res: Response, next: NextFunction)
     const { email, role } = req.body as AddMemberInput;
     const member = await workspaceService.addMember(req.params.workspaceId as string, email, role, req.user.id);
     successResponse(res, member, 201);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateMemberRole(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.user) throw new UnauthorizedError();
+    const { role } = req.body as UpdateMemberRoleInput;
+    const member = await workspaceService.updateMemberRole(
+      req.params.workspaceId as string,
+      req.params.memberId as string,
+      role,
+      req.user.id
+    );
+    successResponse(res, member);
   } catch (error) {
     next(error);
   }
