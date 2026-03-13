@@ -3,11 +3,14 @@ import {
   LayoutDashboard,
   Users,
   FileText,
+  Calendar,
   MessageSquare,
   ClipboardList,
   Settings,
   Instagram,
   X,
+  LayoutTemplate,
+  BarChart2,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useWorkspace } from '../../hooks/useWorkspace';
@@ -17,6 +20,9 @@ const navItems = [
   { to: ROUTES.DASHBOARD, icon: LayoutDashboard, label: 'Dashboard' },
   { to: ROUTES.ACCOUNTS, icon: Users, label: 'Accounts' },
   { to: ROUTES.POSTS, icon: FileText, label: 'Posts' },
+  { to: ROUTES.CALENDAR, icon: Calendar, label: 'Calendar' },
+  { to: ROUTES.TEMPLATES, icon: LayoutTemplate, label: 'Templates' },
+  { to: ROUTES.REPORTS, icon: BarChart2, label: 'Reports' },
   { to: ROUTES.MESSAGES, icon: MessageSquare, label: 'Messages' },
   { to: ROUTES.AUDIT_LOG, icon: ClipboardList, label: 'Audit Log' },
   { to: ROUTES.SETTINGS, icon: Settings, label: 'Settings' },

@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import { getInitials } from '../../lib/utils';
+import { NotificationBell } from './NotificationBell';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -67,6 +68,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         <div className="flex items-center gap-3">
           {user && (
             <div className="flex items-center gap-3">
+              <NotificationBell />
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white">
                 {getInitials(user.name)}
               </div>

@@ -16,10 +16,14 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  workspaceMembers WorkspaceMember[]
-  posts            Post[]
-  auditLogs        AuditLog[]
-  refreshTokens    RefreshToken[]
+  workspaceMembers        WorkspaceMember[]
+  posts                   Post[]
+  auditLogs               AuditLog[]
+  refreshTokens           RefreshToken[]
+  postTemplates           PostTemplate[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  reports                 Report[]
 }
 
 model Workspace {
@@ -28,11 +32,16 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members           WorkspaceMember[]
-  instagramAccounts InstagramAccount[]
-  posts             Post[]
-  auditLogs         AuditLog[]
-  messages          Message[]
+  members                 WorkspaceMember[]
+  instagramAccounts       InstagramAccount[]
+  posts                   Post[]
+  auditLogs               AuditLog[]
+  messages                Message[]
+  postTemplates           PostTemplate[]
+  hashtagSets             HashtagSet[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  reports                 Report[]
 }
 
 model WorkspaceMember {
@@ -197,4 +206,89 @@ model PostInsight {
   fetchedAt      DateTime @default(now())
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  type        String
+  title       String
+  message     String   @db.Text
+  link        String?
+  read        Boolean  @default(false)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, createdAt])
+  @@index([userId, read])
+}
+
+model NotificationPreference {
+  id               String  @id @default(cuid())
+  userId           String
+  workspaceId      String
+  postFailed       Boolean @default(true)
+  tokenExpiring    Boolean @default(true)
+  engagementSpike  Boolean @default(true)
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+model PostTemplate {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  caption     String    @db.Text
+  hashtags    String?
+  category    String?
+  lastUsedAt  DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([workspaceId, lastUsedAt])
+}
+
+model HashtagSet {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  hashtags    String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model Report {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  title          String
+  accountIds     String
+  startDate      DateTime
+  endDate        DateTime
+  data           Json
+  shareToken     String?   @unique
+  shareExpiresAt DateTime?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([shareToken])
 }

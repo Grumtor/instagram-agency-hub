@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Save, UserPlus, Settings, Lock, Trash2 } from 'lucide-react';
+import { Save, UserPlus, Settings, Lock, Trash2, Bell } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import { useWorkspace } from '../hooks/useWorkspace';
@@ -9,10 +9,11 @@ import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { ErrorAlert } from '../components/common/ErrorAlert';
 import { EmptyState } from '../components/common/EmptyState';
 import { extractErrorMessage } from '../lib/errorUtils';
+import { useNotificationPreferences } from '../hooks/useNotifications';
 import type { WorkspaceMember } from '../types';
 import { cn } from '../lib/utils';
 
-type Tab = 'general' | 'members' | 'security';
+type Tab = 'general' | 'members' | 'security' | 'notifications';
 
 const TAB_PANEL_ID = (tab: Tab) => `tabpanel-${tab}`;
 const TAB_BUTTON_ID = (tab: Tab) => `tab-${tab}`;
@@ -32,7 +33,7 @@ export default function SettingsPage() {
 
       <div className="border-b border-gray-200">
         <nav className="flex gap-6" role="tablist" aria-label="Settings tabs">
-          {(['general', 'members', 'security'] as Tab[]).map((tab) => (
+          {(['general', 'members', 'security', 'notifications'] as Tab[]).map((tab) => (
             <button
               key={tab}
               id={TAB_BUTTON_ID(tab)}
@@ -81,6 +82,15 @@ export default function SettingsPage() {
         hidden={activeTab !== 'security'}
       >
         <SecurityTab />
+      </div>
+
+      <div
+        id={TAB_PANEL_ID('notifications')}
+        role="tabpanel"
+        aria-labelledby={TAB_BUTTON_ID('notifications')}
+        hidden={activeTab !== 'notifications'}
+      >
+        <NotificationsTab workspaceId={currentWorkspace?.id} />
       </div>
     </div>
   );
@@ -527,5 +537,131 @@ function SecurityTab() {
         </form>
       </div>
     </div>
+  );
+}
+
+function NotificationsTab({ workspaceId }: { workspaceId?: string }) {
+  const { preferences, loading, saving, error, updatePreferences } = useNotificationPreferences();
+
+  if (!workspaceId) {
+    return (
+      <EmptyState
+        icon={Settings}
+        title="No workspace selected"
+        description="Select a workspace to manage notification preferences."
+      />
+    );
+  }
+
+  if (loading) {
+    return <LoadingSpinner text="Loading preferences..." />;
+  }
+
+  if (error) {
+    return <ErrorAlert message={error} />;
+  }
+
+  const handleToggle = async (key: 'tokenExpiring' | 'engagementSpike', value: boolean) => {
+    try {
+      await updatePreferences({ [key]: value });
+      toast.success('Preferences saved');
+    } catch (err) {
+      toast.error(extractErrorMessage(err, 'Failed to save preferences'));
+    }
+  };
+
+  return (
+    <div className="max-w-lg space-y-4">
+      <div className="rounded-xl border border-gray-200 bg-white p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Bell className="h-5 w-5 text-gray-600" />
+          <h3 className="text-base font-semibold text-gray-900">Notification Preferences</h3>
+        </div>
+        <p className="text-sm text-gray-500 mb-6">
+          Choose which events trigger notifications for you in this workspace.
+        </p>
+
+        <div className="space-y-4">
+          {/* post_failed — always on, cannot disable */}
+          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Post failed</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                When a scheduled post fails to publish after all retry attempts
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">Always on</span>
+              <div className="relative inline-flex h-5 w-9 shrink-0 cursor-not-allowed rounded-full bg-indigo-600 opacity-60">
+                <span className="sr-only">Post failed notifications enabled</span>
+                <span className="translate-x-4 inline-block h-4 w-4 translate-y-0.5 transform rounded-full bg-white shadow transition" />
+              </div>
+            </div>
+          </div>
+
+          {/* token_expiring */}
+          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Token expiring</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                When an Instagram access token is expiring within 7 days
+              </p>
+            </div>
+            <Toggle
+              enabled={preferences?.tokenExpiring ?? true}
+              disabled={saving}
+              onChange={(val) => handleToggle('tokenExpiring', val)}
+            />
+          </div>
+
+          {/* engagement_spike */}
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Engagement spike</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                When a post gets 3x or more engagement above the account average
+              </p>
+            </div>
+            <Toggle
+              enabled={preferences?.engagementSpike ?? true}
+              disabled={saving}
+              onChange={(val) => handleToggle('engagementSpike', val)}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Toggle({
+  enabled,
+  disabled,
+  onChange,
+}: {
+  enabled: boolean;
+  disabled?: boolean;
+  onChange: (val: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      disabled={disabled}
+      onClick={() => onChange(!enabled)}
+      className={cn(
+        'relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50',
+        enabled ? 'bg-indigo-600' : 'bg-gray-200',
+      )}
+    >
+      <span className="sr-only">{enabled ? 'Disable' : 'Enable'}</span>
+      <span
+        className={cn(
+          'inline-block h-4 w-4 translate-y-0.5 transform rounded-full bg-white shadow transition-transform',
+          enabled ? 'translate-x-4' : 'translate-x-0.5',
+        )}
+      />
+    </button>
   );
 }

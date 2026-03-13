@@ -4,9 +4,16 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   ACCOUNTS: '/accounts',
   POSTS: '/posts',
+  CALENDAR: '/calendar',
   MESSAGES: '/messages',
   AUDIT_LOG: '/audit-log',
   SETTINGS: '/settings',
+  TEMPLATES: '/templates',
+  NOTIFICATIONS: '/notifications',
+  BULK_SCHEDULE: '/bulk-schedule',
+  REPORTS: '/reports',
+  REPORT_VIEW: '/reports/:reportId',
+  SHARED_REPORT: '/shared-report/:token',
 } as const;
 
 export const POST_STATUS_CONFIG: Record<
