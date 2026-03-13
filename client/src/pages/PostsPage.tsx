@@ -1,17 +1,19 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, CalendarRange } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { usePosts } from '../hooks/usePosts';
 import { useAccounts } from '../hooks/useAccounts';
 import { PostList } from '../components/posts/PostList';
 import { CreatePostDialog } from '../components/posts/CreatePostDialog';
-import { POST_STATUS_CONFIG } from '../lib/constants';
+import { POST_STATUS_CONFIG, ROUTES } from '../lib/constants';
 import { extractErrorMessage } from '../lib/errorUtils';
 import type { Post, PostStatus } from '../types';
 
 const LIMIT = 20;
 
 export default function PostsPage() {
+  const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<PostStatus | ''>('');
   const [accountFilter, setAccountFilter] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -90,13 +92,22 @@ export default function PostsPage() {
             Create and manage your Instagram content
           </p>
         </div>
-        <button
-          onClick={() => setDialogOpen(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          New Post
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate(ROUTES.BULK_SCHEDULE)}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+          >
+            <CalendarRange className="h-4 w-4" />
+            Bulk Schedule
+          </button>
+          <button
+            onClick={() => setDialogOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            New Post
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">

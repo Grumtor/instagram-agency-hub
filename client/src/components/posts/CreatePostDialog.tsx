@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Video } from 'lucide-react';
+import { X, Video, LayoutTemplate } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import { MediaUploader } from './MediaUploader';
 import { SchedulePicker } from './SchedulePicker';
+import { TemplatePickerDialog } from './TemplatePickerDialog';
 import { extractErrorMessage } from '../../lib/errorUtils';
-import type { InstagramAccount, Post, PostType } from '../../types';
+import type { InstagramAccount, Post, PostTemplate, PostType } from '../../types';
 import { POST_TYPE_LABELS } from '../../lib/constants';
 
 interface CreatePostDialogProps {
@@ -46,6 +47,7 @@ export function CreatePostDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [localhostWarning, setLocalhostWarning] = useState(false);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<Element | null>(null);
@@ -143,6 +145,14 @@ export function CreatePostDialog({
     setScheduledAt('');
     setError('');
     setLocalhostWarning(false);
+  };
+
+  const handleTemplateSelect = (template: PostTemplate) => {
+    const combined = template.hashtags
+      ? `${template.caption}\n\n${template.hashtags}`
+      : template.caption;
+    setCaption(combined);
+    setError('');
   };
 
   const removeFile = (index: number) => {
@@ -258,12 +268,24 @@ export function CreatePostDialog({
           <h2 id={headingId} className="text-lg font-semibold text-gray-900">
             {title}
           </h2>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isEdit && (
+              <button
+                type="button"
+                onClick={() => setTemplatePickerOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
+              >
+                <LayoutTemplate className="h-3.5 w-3.5" />
+                From Template
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -391,6 +413,12 @@ export function CreatePostDialog({
           </div>
         </form>
       </div>
+
+      <TemplatePickerDialog
+        open={templatePickerOpen}
+        onClose={() => setTemplatePickerOpen(false)}
+        onSelect={handleTemplateSelect}
+      />
     </div>
   );
 }

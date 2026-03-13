@@ -4,6 +4,7 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 import { PostStatus, PostType, AuditAction } from '../types/enums';
 import { createAuditLog } from '../services/auditLog.service';
+import { createNotificationForWorkspace } from '../services/notification.service';
 import { safeParseMediaUrls } from '../utils/safeJson';
 import * as publisher from '../services/publisher.service';
 
@@ -152,6 +153,15 @@ export async function processPost(postId: string): Promise<void> {
         post.id,
         { error: errorMessage, retryCount: newRetryCount },
       );
+
+      createNotificationForWorkspace({
+        workspaceId: post.workspaceId,
+        type: 'post_failed',
+        title: 'Post failed to publish',
+        message: `A post failed to publish after ${newRetryCount} attempt(s): ${errorMessage}`,
+        link: `/posts`,
+        metadata: { postId: post.id, error: errorMessage, retryCount: newRetryCount },
+      }).catch((err) => logger.error({ err, postId }, 'Failed to create post_failed notification'));
 
       logger.error({ postId, error: errorMessage }, 'Post publish failed permanently');
     }

@@ -76,3 +76,38 @@ export function handleUpload(fieldName: string, maxCount: number) {
     });
   };
 }
+
+// CSV upload — accepts only text/csv and text/plain (browsers vary on MIME for .csv)
+const csvMulterInstance = multer({
+  storage,
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['text/csv', 'text/plain', 'application/csv', 'application/vnd.ms-excel'];
+    const extOk = file.originalname.toLowerCase().endsWith('.csv');
+    if (allowed.includes(file.mimetype) || extOk) {
+      cb(null, true);
+    } else {
+      cb(new ValidationError('Only CSV files are allowed'));
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5 MB max for CSV
+  },
+});
+
+export function handleCsvUpload(fieldName: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const middleware = csvMulterInstance.single(fieldName);
+    middleware(req, res, (err: unknown) => {
+      if (err) {
+        if (err instanceof multer.MulterError) {
+          if (err.code === 'LIMIT_FILE_SIZE') {
+            return next(new ValidationError('CSV file too large. Maximum size is 5MB'));
+          }
+          return next(new ValidationError(err.message));
+        }
+        return next(err);
+      }
+      next();
+    });
+  };
+}

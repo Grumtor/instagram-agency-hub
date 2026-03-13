@@ -5,6 +5,7 @@ import { logger } from '../utils/logger';
 import { processPost } from '../workers/publishWorker';
 import { refreshLongLivedToken } from '../utils/tokenRefresh';
 import { decrypt, encrypt } from '../config/encryption';
+import { createNotificationForWorkspace } from './notification.service';
 
 function startScheduler(): void {
   cron.schedule('* * * * *', async () => {
@@ -62,6 +63,24 @@ function startScheduler(): void {
       }
 
       for (const account of accounts) {
+        // Notify workspace members about accounts that are expiring soon (not yet expired)
+        const now = new Date();
+        if (account.tokenExpiresAt && account.tokenExpiresAt > now) {
+          const daysUntilExpiry = Math.ceil(
+            (account.tokenExpiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+          );
+          createNotificationForWorkspace({
+            workspaceId: account.workspaceId,
+            type: 'token_expiring',
+            title: 'Instagram token expiring soon',
+            message: `The access token for @${account.igUsername} is expiring in ${daysUntilExpiry} day(s). It will be refreshed automatically.`,
+            link: `/accounts`,
+            metadata: { accountId: account.id, igUsername: account.igUsername, daysUntilExpiry },
+          }).catch((err) =>
+            logger.error({ err, accountId: account.id }, 'Failed to create token_expiring notification'),
+          );
+        }
+
         try {
           const currentToken = decrypt(
             account.accessTokenEncrypted,

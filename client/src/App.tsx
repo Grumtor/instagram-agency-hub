@@ -10,9 +10,16 @@ const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const AccountsPage = lazy(() => import('./pages/AccountsPage'));
 const PostsPage = lazy(() => import('./pages/PostsPage'));
+const CalendarPage = lazy(() => import('./pages/CalendarPage'));
 const MessagesPage = lazy(() => import('./pages/MessagesPage'));
 const AuditLogPage = lazy(() => import('./pages/AuditLogPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const TemplatesPage = lazy(() => import('./pages/TemplatesPage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const BulkSchedulePage = lazy(() => import('./pages/BulkSchedulePage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const ReportViewPage = lazy(() => import('./pages/ReportViewPage'));
+const SharedReportPage = lazy(() => import('./pages/SharedReportPage'));
 
 function PageLoader() {
   return (
@@ -34,11 +41,19 @@ export default function App() {
             <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
             <Route path={ROUTES.ACCOUNTS} element={<AccountsPage />} />
             <Route path={ROUTES.POSTS} element={<PostsPage />} />
+            <Route path={ROUTES.CALENDAR} element={<CalendarPage />} />
             <Route path={ROUTES.MESSAGES} element={<MessagesPage />} />
             <Route path={ROUTES.AUDIT_LOG} element={<AuditLogPage />} />
             <Route path={ROUTES.SETTINGS} element={<SettingsPage />} />
+            <Route path={ROUTES.TEMPLATES} element={<TemplatesPage />} />
+            <Route path={ROUTES.NOTIFICATIONS} element={<NotificationsPage />} />
+            <Route path={ROUTES.BULK_SCHEDULE} element={<BulkSchedulePage />} />
+            <Route path={ROUTES.REPORTS} element={<ReportsPage />} />
+            <Route path={ROUTES.REPORT_VIEW} element={<ReportViewPage />} />
           </Route>
         </Route>
+
+        <Route path={ROUTES.SHARED_REPORT} element={<SharedReportPage />} />
 
         <Route path="*" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
       </Routes>
