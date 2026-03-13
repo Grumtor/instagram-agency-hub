@@ -1,5 +1,5 @@
 import { Users, FileText, Clock, CheckCircle, AlertTriangle, Edit3 } from 'lucide-react';
-import { Card, Metric, Text, Flex, Grid } from '@tremor/react';
+import { Card, Metric, Text, Flex } from '@tremor/react';
 import type { DashboardStats } from '../../types';
 
 interface StatsCardsProps {
@@ -53,7 +53,7 @@ const cards = [
 
 export function StatsCards({ stats }: StatsCardsProps) {
   return (
-    <Grid numItems={2} numItemsSm={3} numItemsLg={6} className="gap-4">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
       {cards.map((card) => (
         <Card key={card.key} className="p-4">
           <Flex justifyContent="start" alignItems="center" className="gap-3">
@@ -67,6 +67,6 @@ export function StatsCards({ stats }: StatsCardsProps) {
           </Flex>
         </Card>
       ))}
-    </Grid>
+    </div>
   );
 }

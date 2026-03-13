@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Card, AreaChart, Metric, Text, Flex, Grid } from '@tremor/react';
+import { Card, AreaChart, Metric, Text, Flex } from '@tremor/react';
 import { api } from '../../lib/api';
 import type { AccountInsightSummary } from '../../types';
 
@@ -70,7 +70,7 @@ function InsightCard({ insight, workspaceId, onRefreshComplete }: InsightCardPro
       </Flex>
 
       {/* Key metrics row */}
-      <Grid numItems={2} numItemsSm={4} className="gap-4 mb-5">
+      <div className="grid grid-cols-2 gap-4 mb-5 sm:grid-cols-4">
         <div>
           <Text className="text-xs text-gray-500">Followers</Text>
           <Metric className="text-lg leading-tight">{fmt(insight.followerCount)}</Metric>
@@ -93,7 +93,7 @@ function InsightCard({ insight, workspaceId, onRefreshComplete }: InsightCardPro
             {series.length > 0 ? fmt(totalProfileViews) : fmt(insight.profileViews)}
           </Metric>
         </div>
-      </Grid>
+      </div>
 
       {/* 28-day area chart */}
       {series.length > 1 ? (
@@ -133,7 +133,7 @@ export function AccountInsightsCards({
   return (
     <div>
       <h2 className="text-lg font-semibold text-gray-900 mb-3">Account Analytics</h2>
-      <Grid numItems={1} numItemsSm={2} numItemsLg={3} className="gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {insights.map((insight) => (
           <InsightCard
             key={insight.igAccountId}
@@ -142,7 +142,7 @@ export function AccountInsightsCards({
             onRefreshComplete={onRefreshComplete}
           />
         ))}
-      </Grid>
+      </div>
     </div>
   );
 }
